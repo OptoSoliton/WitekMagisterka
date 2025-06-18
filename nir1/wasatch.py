@@ -46,6 +46,19 @@ class Wasatch:
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         self.graph_window.withdraw()
 
+        # Window for measured points
+        self.points_window = tk.Toplevel(self.root)
+        self.points_window.title("Measured points")
+        self.points_fig = Figure(figsize=(4, 4), dpi=100)
+        self.points_ax = self.points_fig.add_subplot(111, projection='3d')
+        self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=self.points_window)
+        self.points_canvas.draw()
+        self.points_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=1)
+        self.points_window.withdraw()
+
+        self.points = []
+        self.position = (None, None, None)
+
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
 
@@ -123,6 +136,7 @@ class Wasatch:
 
     def run(self, type):
         self.type = type
+        self.position = (None, None, None)
         if self.device is None:
             print("Not connected to spectrometer")
             return False
@@ -147,6 +161,10 @@ class Wasatch:
             except:
                 pass
         return True
+
+    def run_with_position(self, label, x, y, z):
+        self.position = (x, y, z)
+        return self.run(label)
 
     def attempt_reading(self):
         try:
@@ -215,10 +233,21 @@ class Wasatch:
         # print(spectrum)
 
         if self.outfile:
-            self.outfile.write("%s;%s;%.2f;%s\n" % (self.type,
-                                                datetime.datetime.now(),
-                                                 reading.detector_temperature_degC,
-                                                 ";".join(format(x, ".2f") for x in spectrum)))
+            x, y, z = self.position
+            self.outfile.write("%s;%s;%s;%s;%.2f;%s\n" % (
+                self.type,
+                format(x, ".2f") if x is not None else "",
+                format(y, ".2f") if y is not None else "",
+                format(z, ".2f") if z is not None else "",
+                reading.detector_temperature_degC,
+                ";".join(format(x, ".2f") for x in spectrum)))
+
+        if None not in self.position:
+            self.points.append(self.position)
+            xs, ys, zs = zip(*self.points)
+            self.points_ax.clear()
+            self.points_ax.scatter(xs, ys, zs, c='b', marker='o')
+            self.points_canvas.draw()
 
         self.draw_graph(spectrum)
         return
@@ -249,8 +278,8 @@ class Wasatch:
             if file_has_data:
                 self.outfile = open(outfile_path, "a")  
             else:
-                self.outfile = open(outfile_path, "w")  
-                self.outfile.write("type,time,temp,%s\n" % ",".join(format(x, ".2f") for x in self.device.settings.wavelengths))
+                self.outfile = open(outfile_path, "w")
+                self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
             
             print('Filepath set to: %s', outfile_path)
         except Exception as e:
@@ -287,8 +316,8 @@ class Wasatch:
                 if file_has_data:
                     self.outfile = open(self.args.outfile, "a")  
                 else:
-                    self.outfile = open(self.args.outfile, "w")  
-                    self.outfile.write("type;time;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
+                    self.outfile = open(self.args.outfile, "w")
+                    self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
 
             except Exception as e:
                 print(f"Error initializing {self.args.outfile}: {e}")
@@ -312,6 +341,12 @@ class Wasatch:
             self.graph_window.withdraw()  # Hide plot
         else:
             self.graph_window.deiconify()  # Show plot
+
+    def toggle_points_window(self):
+        if self.points_window.winfo_ismapped():
+            self.points_window.withdraw()
+        else:
+            self.points_window.deiconify()
 
 def signal_handler(signal, frame):
     print('\rInterrupted by Ctrl-C...shutting down', end=' ')
