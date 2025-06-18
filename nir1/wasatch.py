@@ -39,6 +39,7 @@ class Wasatch:
         # Create tkinter window for plot
         self.graph_window = tk.Toplevel(self.root)
         self.graph_window.title("Measurement plot")
+        self.graph_window.protocol("WM_DELETE_WINDOW", self.graph_window.withdraw)
         self.fig = Figure(figsize=(5, 4), dpi=100)
         self.ax = self.fig.add_subplot(111)
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.graph_window)
@@ -49,6 +50,7 @@ class Wasatch:
         # Window for measured points
         self.points_window = tk.Toplevel(self.root)
         self.points_window.title("Measured points")
+        self.points_window.protocol("WM_DELETE_WINDOW", self.points_window.withdraw)
         self.points_fig = Figure(figsize=(4, 4), dpi=100)
         self.points_ax = self.points_fig.add_subplot(111, projection='3d')
         self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=self.points_window)
@@ -136,7 +138,6 @@ class Wasatch:
 
     def run(self, type):
         self.type = type
-        self.position = (None, None, None)
         if self.device is None:
             print("Not connected to spectrometer")
             return False
