@@ -13,7 +13,8 @@ class MyGUI:
 
         # Actual X and Y position
         self.current_position = {'X': 0, 'Y': 0}
-        self.user_positions = {'1': None, '2': None, '3': None, '4': None}
+        self.user_positions = {'2': None, '3': None, '4': None}
+
         self.integration_time = 10
         self.scans_to_average = 1
         self.boxcar_half_width = 0
@@ -309,19 +310,8 @@ class MyGUI:
         else:
             port = self.serial_port_combobox.get()
             log_message = self.serial.connect_cnc(port)
-            if self.serial.connected:
-                # ► start podglądu “?”
-                self.serial.start_status_monitor(self.log)
             self.connect_button.config(text="Disconnect")
         self.log(log_message)
-
-    def validate_positions(self):
-        missing = [str(n) for n in range(1,5) if self.user_positions.get(str(n)) is None]
-        if missing:
-            from tkinter import messagebox
-            messagebox.showerror('Positions not set', f'Brakuje Set: {", ".join(missing)}')
-            return False
-        return True    
 
     def log(self, message):
         self.log_text.insert(tk.END, message + "\n")
@@ -449,7 +439,7 @@ class MyGUI:
 
         # Turn cnc into start point (0,0)
         self.serial.send_gcode('G90')
-        move_command = f'G1 X{-abs(self.user_positions["1"]["X"])} Y{-abs(self.user_positions["1"]["Y"])} F{self.get_speed()}'
+        move_command = f'G1 X-{self.user_positions["1"]["X"]} Y{self.user_positions["1"]["Y"]} F{self.get_speed()}'
         self.serial.send_gcode(move_command)
         self.log("Moving to start position")
         self.waitForCNC()
@@ -470,7 +460,7 @@ class MyGUI:
                     # New position Y
                     new_y = self.user_positions['1']['Y'] + j * step_y
                     # Move cnc to new position
-                    move_command = f'G1 X{-abs(new_x)} Y{-abs(new_y)} F{self.get_speed()}'
+                    move_command = f'G1 X-{new_x} Y-{new_y} F{self.get_speed()}'
                     self.serial.send_gcode(move_command)
                     self.log(f"Moving to position X: {new_x}, Y: {new_y}")
                     self.waitForCNC()
@@ -497,13 +487,9 @@ class MyGUI:
             self.running = False
 
     def waitForCNC(self):
-        start = time.time()
         while not self.serial.wait_for_ending_move():
-            if time.time() - start > 30:
-                raise TimeoutError('CNC nie przechodzi w Idle (30 s) – przerywam')
-            time.sleep(0.05)
+            pass
 
-            
     def measureDelayFromSteps(self, step):
         wait_time_ms = self.interpolate_time(step) + 100
         time.sleep(wait_time_ms/1000)

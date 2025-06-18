@@ -6,7 +6,6 @@ class CNCSerial:
     def __init__(self):
         self.serial_port = None
         self.connected = False
-        self._status_thread = None   # ◄─ nowy: monitoring “?”
 
     def connect_cnc(self, port):
         try:
@@ -30,38 +29,14 @@ class CNCSerial:
             return f"Command sent: {command}"
         return "Not connected to CNC"
 
-    def wait_for_ending_move(self, timeout=10):
-        """Czeka aż GRBL zwróci Idle lub minie *timeout* (s)."""
-        if not (self.serial_port and self.connected):
-            return False
-
-        start = time.time()
-        while time.time() - start < timeout:
-            self.serial_port.write(b'?\n')
-            time.sleep(0.05)
-            response = self.serial_port.read_until().decode(errors='ignore').strip()
-            if 'Idle' in response:
+    def wait_for_ending_move(self):
+        if self.serial_port and self.connected:
+            self.serial_port.write(('?\n').encode())
+            time.sleep(0.1)
+            response = self.serial_port.read_until().decode().strip()
+            if "Idle" in response:
                 return True
         return False
-    
-    def start_status_monitor(self, callback=None, interval=0.5):
-        """Co *interval* sekund wysyła '?' i przekazuje linię do *callback*."""
-        if not (self.serial_port and self.connected):
-            return
-        def _worker():
-            while self.connected:
-                try:
-                    self.serial_port.write(b'?\n')
-                    line = self.serial_port.read_until().decode(errors='ignore').strip()
-                    if callback and line:
-                        callback(line)
-                except Exception:
-                    pass
-                time.sleep(interval)
-        import threading; threading.Thread(target=_worker, daemon=True).start()
 
-    @staticmethod
     def list_serial_ports(self):
         return [port.device for port in serial.tools.list_ports.comports()]
-
-    
