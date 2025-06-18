@@ -61,7 +61,8 @@ class CNCSerial:
         import threading; threading.Thread(target=_worker, daemon=True).start()
 
     @staticmethod
-    def list_serial_ports(self):
+    def list_serial_ports():
+        """Return available serial port device names."""
         return [port.device for port in serial.tools.list_ports.comports()]
 
     
