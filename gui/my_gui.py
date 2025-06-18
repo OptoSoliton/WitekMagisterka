@@ -24,6 +24,12 @@ class MyGUI:
             '5': None,
         }
 
+
+        # Actual XYZ position
+        self.current_position = {'X': 0, 'Y': 0, 'Z': 0}
+        # Positions 1-4 used to define scan area
+        self.user_positions = {'1': None, '2': None, '3': None, '4': None}
+
         self.integration_time = 10
         self.scans_to_average = 1
         self.boxcar_half_width = 0
@@ -295,6 +301,7 @@ class MyGUI:
         self.position_label = ttk.Label(self.map_frame, text="X:0 Y:0 Z:0")
         self.position_label.pack()
 
+
     def toggle_plot(self):
         if self.toggle_plot_button["text"] == "Show plot":
             self.toggle_plot_button.config(text="Hide plot")
@@ -391,6 +398,8 @@ class MyGUI:
             self.current_position['Z']
         )
 
+        self.update_map_position(self.current_position['X'], self.current_position['Y'])
+
     def get_step(self):
         return self.step_entry.get()
 
@@ -404,6 +413,8 @@ class MyGUI:
         self.log(log_message)
 
     def update_map_position(self, x, y, z=None):
+
+    def update_map_position(self, x, y):
         try:
             x1 = self.user_positions['1']['X']
             x2 = self.user_positions['2']['X']
@@ -432,6 +443,11 @@ class MyGUI:
             self.current_position['Y'],
             self.current_position['Z']
         )
+
+
+    def set_position(self, position_number):
+        self.user_positions[str(position_number)] = self.current_position.copy()
+        self.log(f"Position {position_number} set to X:{self.current_position['X']}, Y:{self.current_position['Y']}, Z:{self.current_position['Z']}.")
 
     def test_positions(self):
         # Move to the initial position 0,0 first
@@ -464,6 +480,9 @@ class MyGUI:
         self.log("Current position set as 0,0,0.")
         self.update_map_position(0, 0, 0)
 
+        self.log("Current position set as 0,0.")
+        self.update_map_position(0, 0)
+
     def move_to_zero(self):
         init_commands = [
             'G90',
@@ -476,6 +495,8 @@ class MyGUI:
 
         self.log("Complete.")
         self.update_map_position(0, 0, 0)
+
+        self.update_map_position(0, 0)
 
     def start_measurement(self):
         self.stop_measurement()
@@ -519,6 +540,8 @@ class MyGUI:
         if self.samples_count_z > 1:
             step_z = (self.user_positions['5']['Z'] - self.user_positions['1']['Z']) / (self.samples_count_z - 1)
 
+            step_z = (self.user_positions['3']['Z'] - self.user_positions['1']['Z']) / (self.samples_count_z - 1)
+
         # Turn cnc into start point (0,0)
         self.serial.send_gcode('G90')
         move_command = f'G1 X-{self.user_positions["1"]["X"]} Y{self.user_positions["1"]["Y"]} Z-{self.user_positions["1"]["Z"]} F{self.get_speed()}'
@@ -552,6 +575,8 @@ class MyGUI:
                             isChangedX = False
                         current_measure += 1
                         self.update_map_position(new_x, new_y, new_z)
+
+                        self.update_map_position(new_x, new_y)
                         self.log(f"Measure {current_measure} out of {measure_count}.")
                         finished = self.wasatch.run_with_position("scan", new_x, new_y, new_z)
                         progress = int((current_measure / measure_count) * 100)
