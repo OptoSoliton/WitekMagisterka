@@ -308,7 +308,9 @@ class MyGUI:
 
         # 3D head position and scan volume preview
         self.map_frame = ttk.LabelFrame(self.right_frame, text="Head position 3D")
-        self.map_frame.grid(row=4, column=1, padx=10, pady=5)
+        # place preview at top-right corner
+        self.map_frame.grid(row=0, column=2, rowspan=5, padx=10, pady=5, sticky="ne")
+
         from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
         from matplotlib.figure import Figure
         self.map_fig = Figure(figsize=(3.5, 3.5), dpi=100)
@@ -320,6 +322,10 @@ class MyGUI:
         self.position_label.pack()
         self.head_dot = None
         self.volume_lines = []
+        self.point_dots = []
+
+        self.help_button = ttk.Button(self.right_frame, text="Help", command=self.show_help)
+        self.help_button.grid(row=5, column=1, padx=10, pady=5, sticky="ew")
 
 
     def toggle_plot(self):
@@ -335,6 +341,18 @@ class MyGUI:
         else:
             self.toggle_points_button.config(text="Show points")
         self.wasatch.toggle_points_window()
+
+    def show_help(self):
+        from tkinter import messagebox
+        msg = (
+            "Troubleshooting:\n"
+            "- Define positions with the SET buttons before running.\n"
+            "- Scroll the window if some widgets are hidden.\n"
+            "- Files are automatically numbered when existing.\n"
+            "- Ensure matplotlib is installed for plotting."
+        )
+        messagebox.showinfo("Help", msg)
+
 
     def update_progress(self, progress):
         self.progress_bar["value"] = progress
@@ -472,6 +490,10 @@ class MyGUI:
         for line in self.volume_lines:
             line.remove()
         self.volume_lines = []
+        for dot in self.point_dots:
+            dot.remove()
+        self.point_dots = []
+
 
         for e in edges:
             line = self.map_ax.plot(
@@ -482,9 +504,20 @@ class MyGUI:
             )[0]
             self.volume_lines.append(line)
 
+        colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
+        for idx, key in enumerate(['1','2','3','4','5']):
+            pt = self.user_positions.get(key)
+            if pt:
+                dot = self.map_ax.scatter([pt['X']], [pt['Y']], [pt['Z']], color=colors[idx], marker='o')
+                self.map_ax.text(pt['X'], pt['Y'], pt['Z'], f"{key}")
+                self.point_dots.append(dot)
+
         self.map_ax.set_xlim(min(xs), max(xs))
         self.map_ax.set_ylim(min(ys), max(ys))
         self.map_ax.set_zlim(min(zs), max(zs))
+        self.map_ax.set_xlabel('X')
+        self.map_ax.set_ylabel('Y')
+        self.map_ax.set_zlabel('Z')
 
 
 
@@ -501,29 +534,38 @@ class MyGUI:
 
 
     def test_positions(self):
-        # Move to the initial position 0,0 first
-        self.serial.send_gcode('G90')
+        """Move along all edges of the defined volume."""
+        try:
+            import itertools
+            x1 = self.user_positions['1']['X']
+            x2 = self.user_positions['2']['X']
+            y1 = self.user_positions['1']['Y']
+            y2 = self.user_positions['4']['Y']
+            z1 = self.user_positions['1']['Z']
+            z2 = self.user_positions['5']['Z']
+        except Exception:
+            self.log('Set positions 1,2,4 and 5 first')
+            return
 
-        for pos_number in range(1, 6):
-            position = self.user_positions[str(pos_number)]
-            if position is not None:
-                command = f"G1 X-{position['X']} Y{-position['Y']} Z-{position['Z']} F1000"
-                self.serial.send_gcode(command)
-                self.log(
-                    f"Moving to position {pos_number}: X={position['X']}, Y={position['Y']}, Z={position['Z']}"
-                )
-                time.sleep(int(self.get_step())/10)
-        # Move back to position 1
-        position_1 = self.user_positions['1']
-        if position_1 is not None:
-            command = f"G1 X-{position_1['X']} Y{position_1['Y']} Z-{position_1['Z']} F1000"
-            self.serial.send_gcode(command)
-            self.log(
-                f"Returning to position 1: X={position_1['X']}, Y={position_1['Y']}, Z={position_1['Z']}"
-            )
-            time.sleep(1)
-        else:
-            self.log("Position 1 is not selected")
+        xs = [x1, x2]
+        ys = [y1, y2]
+        zs = [z1, z2]
+        corners = list(itertools.product(xs, ys, zs))
+        edges = [
+            (0,1),(0,2),(2,3),(1,3),
+            (4,5),(4,6),(6,7),(5,7),
+            (0,4),(1,5),(2,6),(3,7)
+        ]
+
+        self.serial.send_gcode('G90')
+        for e in edges:
+            target = corners[e[1]]
+            cmd = f"G1 X{ -target[0] } Y{ -target[1] } Z{ -target[2] } F{self.get_speed()}"
+            self.serial.send_gcode(cmd)
+            self.log(f"Moving to {target}")
+            self.waitForCNC()
+        self.serial.send_gcode('G91')
+
 
     def set_position_zero(self):
         self.current_position = {'X': 0, 'Y': 0, 'Z': 0}
@@ -590,9 +632,9 @@ class MyGUI:
         # Turn cnc into start point (0,0)
         self.serial.send_gcode('G90')
         move_command = (
-            f'G1 X-{self.user_positions["1"]["X"]} '
-            f'Y{self.user_positions["1"]["Y"]} '
-            f'Z-{self.user_positions["1"]["Z"]} F{self.get_speed()}'
+            f'G1 X{ -self.user_positions["1"]["X"] } '
+            f'Y{ -self.user_positions["1"]["Y"] } '
+            f'Z{ -self.user_positions["1"]["Z"] } F{self.get_speed()}'
         )
 
         self.serial.send_gcode(move_command)
@@ -606,7 +648,9 @@ class MyGUI:
             self.user_positions['1']['X'], self.user_positions['2']['X'],
             self.user_positions['1']['Y'], self.user_positions['4']['Y'],
             self.user_positions['1']['Z'],
-            self.user_positions['5']['Z'] if self.user_positions['5'] else self.user_positions['1']['Z']
+            self.user_positions['5']['Z'] if self.user_positions['5'] else self.user_positions['1']['Z'],
+            self.user_positions
+
         )
 
         current_measure = 0
@@ -624,7 +668,8 @@ class MyGUI:
                         if not self.running:
                             break
                         new_y = self.user_positions['1']['Y'] + j * step_y
-                        move_command = f'G1 X-{new_x} Y-{new_y} Z-{new_z} F{self.get_speed()}'
+                        move_command = f'G1 X{ -new_x } Y{ -new_y } Z{ -new_z } F{self.get_speed()}'
+
                         self.serial.send_gcode(move_command)
                         self.log(f"Moving to position X: {new_x}, Y: {new_y}, Z: {new_z}")
                         self.waitForCNC()
