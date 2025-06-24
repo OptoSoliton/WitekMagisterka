@@ -39,6 +39,7 @@ class Wasatch:
         # Create tkinter window for plot
         self.graph_window = tk.Toplevel(self.root)
         self.graph_window.title("Measurement plot")
+        self.graph_window.protocol("WM_DELETE_WINDOW", self.graph_window.withdraw)
         self.fig = Figure(figsize=(5, 4), dpi=100)
         self.ax = self.fig.add_subplot(111)
         self.canvas = FigureCanvasTkAgg(self.fig, master=self.graph_window)
@@ -46,8 +47,27 @@ class Wasatch:
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         self.graph_window.withdraw()
 
+        # Window for measured points
+        self.points_window = tk.Toplevel(self.root)
+        self.points_window.title("Measured points")
+        self.points_window.protocol("WM_DELETE_WINDOW", self.points_window.withdraw)
+        self.points_fig = Figure(figsize=(4, 4), dpi=100)
+        self.points_ax = self.points_fig.add_subplot(111, projection='3d')
+        self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=self.points_window)
+        self.points_canvas.draw()
+        self.points_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=1)
+        self.points_window.withdraw()
+
+        self.points = []
+        self.position = (None, None, None)
+        self.bounds = None
+
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
+
+    def set_scan_bounds(self, x1, x2, y1, y2, z1, z2):
+        self.bounds = (x1, x2, y1, y2, z1, z2)
+        self.update_points_plot()
 
     def parse_args(self, argv):
         parser = argparse.ArgumentParser(description="Simple demo to acquire spectra from command-line interface")
@@ -148,6 +168,10 @@ class Wasatch:
                 pass
         return True
 
+    def run_with_position(self, label, x, y, z):
+        self.position = (x, y, z)
+        return self.run(label)
+
     def attempt_reading(self):
         try:
             reading_response = self.acquire_reading()
@@ -215,10 +239,18 @@ class Wasatch:
         # print(spectrum)
 
         if self.outfile:
-            self.outfile.write("%s;%s;%.2f;%s\n" % (self.type,
-                                                datetime.datetime.now(),
-                                                 reading.detector_temperature_degC,
-                                                 ";".join(format(x, ".2f") for x in spectrum)))
+            x, y, z = self.position
+            self.outfile.write("%s;%s;%s;%s;%.2f;%s\n" % (
+                self.type,
+                format(x, ".2f") if x is not None else "",
+                format(y, ".2f") if y is not None else "",
+                format(z, ".2f") if z is not None else "",
+                reading.detector_temperature_degC,
+                ";".join(format(x, ".2f") for x in spectrum)))
+
+        if None not in self.position:
+            self.points.append(self.position)
+            self.update_points_plot()
 
         self.draw_graph(spectrum)
         return
@@ -249,8 +281,8 @@ class Wasatch:
             if file_has_data:
                 self.outfile = open(outfile_path, "a")  
             else:
-                self.outfile = open(outfile_path, "w")  
-                self.outfile.write("type,time,temp,%s\n" % ",".join(format(x, ".2f") for x in self.device.settings.wavelengths))
+                self.outfile = open(outfile_path, "w")
+                self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
             
             print('Filepath set to: %s', outfile_path)
         except Exception as e:
@@ -287,8 +319,8 @@ class Wasatch:
                 if file_has_data:
                     self.outfile = open(self.args.outfile, "a")  
                 else:
-                    self.outfile = open(self.args.outfile, "w")  
-                    self.outfile.write("type;time;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
+                    self.outfile = open(self.args.outfile, "w")
+                    self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
 
             except Exception as e:
                 print(f"Error initializing {self.args.outfile}: {e}")
@@ -307,11 +339,49 @@ class Wasatch:
                 print("Error initializing %s", self.args.outfile)
                 self.outfile = None
 
+    def update_points_plot(self):
+        self.points_ax.clear()
+        if self.bounds:
+            import itertools
+            x1, x2, y1, y2, z1, z2 = self.bounds
+            xs = [x1, x2]
+            ys = [y1, y2]
+            zs = [z1, z2]
+            corners = list(itertools.product(xs, ys, zs))
+            edges = [
+                (0,1),(0,2),(2,3),(1,3),
+                (4,5),(4,6),(6,7),(5,7),
+                (0,4),(1,5),(2,6),(3,7)
+            ]
+            for e in edges:
+                self.points_ax.plot(
+                    [corners[e[0]][0], corners[e[1]][0]],
+                    [corners[e[0]][1], corners[e[1]][1]],
+                    [corners[e[0]][2], corners[e[1]][2]],
+                    color='black'
+                )
+            self.points_ax.set_xlim(min(xs), max(xs))
+            self.points_ax.set_ylim(min(ys), max(ys))
+            self.points_ax.set_zlim(min(zs), max(zs))
+
+        if self.points:
+            xs, ys, zs = zip(*self.points)
+            self.points_ax.scatter(xs, ys, zs, c='red', marker='o')
+
+        self.points_canvas.draw()
+
     def toggle_plot(self):
         if self.graph_window.winfo_ismapped():
             self.graph_window.withdraw()  # Hide plot
         else:
             self.graph_window.deiconify()  # Show plot
+
+    def toggle_points_window(self):
+        if self.points_window.winfo_ismapped():
+            self.points_window.withdraw()
+        else:
+            self.update_points_plot()
+            self.points_window.deiconify()
 
 def signal_handler(signal, frame):
     print('\rInterrupted by Ctrl-C...shutting down', end=' ')
