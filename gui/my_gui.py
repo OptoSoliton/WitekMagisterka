@@ -38,6 +38,7 @@ class MyGUI:
             '5': None,
         }
 
+
         self.integration_time = 10
         self.scans_to_average = 1
         self.boxcar_half_width = 0
@@ -332,10 +333,12 @@ class MyGUI:
         )
         self.continue_button.grid(row=7, column=2, columnspan=2, padx=5, pady=5)
 
+
         # 3D head position and scan volume preview
         self.map_frame = ttk.LabelFrame(self.right_frame, text="Head position 3D")
         # place preview at top-right corner
         self.map_frame.grid(row=0, column=2, rowspan=5, padx=10, pady=5, sticky="ne")
+
         from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
         from matplotlib.figure import Figure
         self.map_fig = Figure(figsize=(3.5, 3.5), dpi=100)
@@ -352,6 +355,7 @@ class MyGUI:
         self.help_button = ttk.Button(self.right_frame, text="Help", command=self.show_help)
         self.help_button.grid(row=5, column=1, padx=10, pady=5, sticky="ew")
 
+
     def toggle_plot(self):
         if self.toggle_plot_button["text"] == "Show plot":
             self.toggle_plot_button.config(text="Hide plot")
@@ -365,6 +369,7 @@ class MyGUI:
             if self.wasatch.predicted_points is None:
                 self.log("Calculating scan points...")
                 self.calculate_predicted_points()
+
         else:
             self.toggle_points_button.config(text="Show points")
         self.wasatch.toggle_points_window()
@@ -379,6 +384,7 @@ class MyGUI:
             "- Ensure matplotlib is installed for plotting."
         )
         messagebox.showinfo("Help", msg)
+
 
     def update_progress(self, progress):
         self.progress_bar["value"] = progress
@@ -496,6 +502,7 @@ class MyGUI:
             self.current_position['Z']
         )
 
+
     def get_step(self):
         return self.step_entry.get()
 
@@ -519,12 +526,14 @@ class MyGUI:
             self.head_dot.remove()
         self.head_dot = self.map_ax.scatter([x], [y], [z], c='red', s=80, alpha=0.6)
 
+
         self.update_volume_display()
         self.map_canvas.draw()
 
     def update_volume_display(self):
         try:
             import itertools
+
             x1 = self.user_positions['1']['X']
             x2 = self.user_positions['2']['X']
             y1 = self.user_positions['1']['Y']
@@ -552,6 +561,7 @@ class MyGUI:
             dot.remove()
         self.point_dots = []
 
+
         for e in edges:
             line = self.map_ax.plot(
                 [corners[e[0]][0], corners[e[1]][0]],
@@ -574,9 +584,11 @@ class MyGUI:
         self.map_ax.set_zlim(min(zs), max(zs))
         if self.map_ax.get_zlim()[0] > self.map_ax.get_zlim()[1]:
             self.map_ax.invert_zaxis()
+
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
         self.map_ax.set_zlabel('Z')
+
 
 
     def set_position(self, position_number):
@@ -609,6 +621,7 @@ class MyGUI:
         self.current_position = pos.copy()
         self.update_map_position(pos['X'], pos['Y'], pos['Z'])
         self.log(f"Moved to position {position_number}")
+n
 
     def test_positions(self):
         """Move along all edges of the defined volume."""
@@ -664,6 +677,7 @@ class MyGUI:
 
         self.log("Complete.")
         self.update_map_position(0, 0, 0)
+
 
     def start_measurement(self):
         self.stop_measurement()
@@ -723,6 +737,7 @@ class MyGUI:
             f'Y{ -self.user_positions["1"]["Y"] } '
             f'Z{ -self.user_positions["1"]["Z"] } F{self.get_speed()}'
         )
+
         self.serial.send_gcode(move_command)
         self.log(
             f"Moving to start position X: {self.user_positions['1']['X']}, "
@@ -739,6 +754,7 @@ class MyGUI:
             self.samples_count_x,
             self.samples_count_y,
             self.samples_count_z
+
         )
 
         current_measure = 0
@@ -759,6 +775,7 @@ class MyGUI:
                             time.sleep(0.1)
                         new_y = self.user_positions['1']['Y'] + j * step_y
                         move_command = f'G1 X{ -new_x } Y{ -new_y } Z{ -new_z } F{self.get_speed()}'
+
                         self.serial.send_gcode(move_command)
                         self.log(f"Moving to position X: {new_x}, Y: {new_y}, Z: {new_z}")
                         self.waitForCNC()
@@ -769,6 +786,7 @@ class MyGUI:
                             isChangedX = False
                         current_measure += 1
                         self.update_map_position(new_x, new_y, new_z)
+
                         self.log(f"Measure {current_measure} out of {measure_count}.")
                         finished = self.wasatch.run_with_position("scan", new_x, new_y, new_z)
                         progress = int((current_measure / measure_count) * 100)
