@@ -283,7 +283,23 @@ class MyGUI:
         self.toggle_points_button = ttk.Button(self.wasatch_measure_frame, text="Show points", command=self.toggle_points)
         self.toggle_points_button.grid(row=3, column=4, columnspan=2, padx=5, pady=5)
 
-        # Progress bar
+        # place preview at top-right corner
+        self.map_frame.grid(row=0, column=2, rowspan=5, padx=10, pady=5, sticky="ne")
+        self.point_dots = []
+
+        self.help_button = ttk.Button(self.right_frame, text="Help", command=self.show_help)
+        self.help_button.grid(row=5, column=1, padx=10, pady=5, sticky="ew")
+    def show_help(self):
+        from tkinter import messagebox
+        msg = (
+            "Troubleshooting:\n"
+            "- Define positions with the SET buttons before running.\n"
+            "- Scroll the window if some widgets are hidden.\n"
+            "- Files are automatically numbered when existing.\n"
+            "- Ensure matplotlib is installed for plotting."
+        )
+        messagebox.showinfo("Help", msg)
+
         self.progress_bar = ttk.Progressbar(self.wasatch_measure_frame, orient="horizontal", length=300,  mode="determinate")
         self.progress_bar.grid(row=4, column=0, columnspan=4, padx=10, pady=5)
 
@@ -443,12 +459,23 @@ class MyGUI:
         self.head_dot = self.map_ax.scatter([x], [y], [z], c='red')
 
         self.update_volume_display()
-        self.map_canvas.draw()
+        for dot in self.point_dots:
+            dot.remove()
+        self.point_dots = []
+        colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
+        for idx, key in enumerate(['1','2','3','4','5']):
+            pt = self.user_positions.get(key)
+            if pt:
+                dot = self.map_ax.scatter([pt['X']], [pt['Y']], [pt['Z']], color=colors[idx], marker='o')
+                self.map_ax.text(pt['X'], pt['Y'], pt['Z'], f"{key}")
+                self.point_dots.append(dot)
 
-    def update_volume_display(self):
+        self.map_ax.set_xlabel('X')
+        self.map_ax.set_ylabel('Y')
+        self.map_ax.set_zlabel('Z')
+        """Move along all edges of the defined volume."""
         try:
             import itertools
-
             x1 = self.user_positions['1']['X']
             x2 = self.user_positions['2']['X']
             y1 = self.user_positions['1']['Y']
@@ -456,15 +483,26 @@ class MyGUI:
             z1 = self.user_positions['1']['Z']
             z2 = self.user_positions['5']['Z']
         except Exception:
+            self.log('Set positions 1,2,4 and 5 first')
             return
-
         xs = [x1, x2]
         ys = [y1, y2]
         zs = [z1, z2]
-
         corners = list(itertools.product(xs, ys, zs))
         edges = [
             (0,1),(0,2),(2,3),(1,3),
+            (4,5),(4,6),(6,7),(5,7),
+            (0,4),(1,5),(2,6),(3,7)
+        ]
+
+        self.serial.send_gcode('G90')
+        for e in edges:
+            target = corners[e[1]]
+            cmd = f"G1 X{ -target[0] } Y{ -target[1] } Z{ -target[2] } F{self.get_speed()}"
+            self.serial.send_gcode(cmd)
+            self.log(f"Moving to {target}")
+            self.waitForCNC()
+        self.serial.send_gcode('G91')
             (4,5),(4,6),(6,7),(5,7),
             (0,4),(1,5),(2,6),(3,7)
         ]
@@ -558,11 +596,12 @@ class MyGUI:
     def start_measurement_once(self):
         run_once_string = self.run_once_description.get()
         if run_once_string =='':
-            run_once_string='single measure'
-        self.wasatch.init_file()
-        self.log(run_once_string)
-        self.wasatch.position = (None, None, None)
-        finished = self.wasatch.run(run_once_string)
+            f'G1 X{ -self.user_positions["1"]["X"] } '
+            f'Y{ -self.user_positions["1"]["Y"] } '
+            f'Z{ -self.user_positions["1"]["Z"] } F{self.get_speed()}'
+            self.user_positions['5']['Z'] if self.user_positions['5'] else self.user_positions['1']['Z'],
+            self.user_positions
+                        move_command = f'G1 X{ -new_x } Y{ -new_y } Z{ -new_z } F{self.get_speed()}'
         self.wasatch.close_file()
 
 

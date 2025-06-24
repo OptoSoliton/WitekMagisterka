@@ -52,7 +52,9 @@ class Wasatch:
         self.points_window.title("Measured points")
         self.points_window.protocol("WM_DELETE_WINDOW", self.points_window.withdraw)
 
-        self.points_fig = Figure(figsize=(4, 4), dpi=100)
+        self.scan_points = None
+    def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None):
+        self.scan_points = points
         self.points_ax = self.points_fig.add_subplot(111, projection='3d')
         self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=self.points_window)
         self.points_canvas.draw()
@@ -241,14 +243,20 @@ class Wasatch:
 
         # print(spectrum)
 
-        if self.outfile:
-            x, y, z = self.position
-            self.outfile.write("%s;%s;%s;%s;%.2f;%s\n" % (
-                self.type,
-                format(x, ".2f") if x is not None else "",
-                format(y, ".2f") if y is not None else "",
-                format(z, ".2f") if z is not None else "",
-                reading.detector_temperature_degC,
+        base, ext = os.path.splitext(outfile_path)
+        unique_path = outfile_path
+        counter = 1
+        while os.path.exists(unique_path):
+            unique_path = f"{base}_{counter}{ext}"
+            counter += 1
+        self.args.outfile = unique_path
+            file_exists = os.path.isfile(self.args.outfile)
+            file_has_data = file_exists and os.path.getsize(self.args.outfile) > 0
+                self.outfile = open(self.args.outfile, "a")
+                self.outfile = open(self.args.outfile, "w")
+
+            print('Filepath set to: %s', self.args.outfile)
+            print("Error initializing %s: %s", self.args.outfile, str(e))
                 ";".join(format(x, ".2f") for x in spectrum)))
 
         if None not in self.position:
@@ -339,6 +347,19 @@ class Wasatch:
             try:
                 self.outfile = open(self.args.outfile, "w")
             except:
+        if self.scan_points:
+            colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
+            for idx, key in enumerate(['1','2','3','4','5']):
+                pt = self.scan_points.get(key)
+                if pt:
+                    self.points_ax.scatter([pt['X']], [pt['Y']], [pt['Z']], color=colors[idx], marker='^', label=f'Point {key}')
+
+        self.points_ax.set_xlabel('X')
+        self.points_ax.set_ylabel('Y')
+        self.points_ax.set_zlabel('Z')
+        if self.scan_points:
+            self.points_ax.legend(loc='best')
+
                 print("Error initializing %s", self.args.outfile)
                 self.outfile = None
 
