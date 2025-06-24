@@ -621,7 +621,7 @@ class MyGUI:
         self.current_position = pos.copy()
         self.update_map_position(pos['X'], pos['Y'], pos['Z'])
         self.log(f"Moved to position {position_number}")
-
+n
 
     def test_positions(self):
         """Move along all edges of the defined volume."""
