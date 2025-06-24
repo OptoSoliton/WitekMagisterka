@@ -60,15 +60,17 @@ class Wasatch:
         self.points_window.withdraw()
 
         self.points = []
+        self.scan_points = None
         self.position = (None, None, None)
         self.bounds = None
-
 
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
 
-    def set_scan_bounds(self, x1, x2, y1, y2, z1, z2):
+    def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None):
         self.bounds = (x1, x2, y1, y2, z1, z2)
+        self.scan_points = points
+
         self.update_points_plot()
 
     def parse_args(self, argv):
@@ -269,7 +271,13 @@ class Wasatch:
         self.canvas.draw()
 
     def set_output_file_path(self, outfile_path):
-        self.args.outfile = outfile_path
+        base, ext = os.path.splitext(outfile_path)
+        unique_path = outfile_path
+        counter = 1
+        while os.path.exists(unique_path):
+            unique_path = f"{base}_{counter}{ext}"
+            counter += 1
+        self.args.outfile = unique_path
 
         if self.outfile:
             try:
@@ -278,18 +286,19 @@ class Wasatch:
                 print("Error closing previous outfile: %s", str(e))
 
         try:
-            file_exists = os.path.isfile(outfile_path)
-            file_has_data = file_exists and os.path.getsize(outfile_path) > 0
+            file_exists = os.path.isfile(self.args.outfile)
+            file_has_data = file_exists and os.path.getsize(self.args.outfile) > 0
 
             if file_has_data:
-                self.outfile = open(outfile_path, "a")  
+                self.outfile = open(self.args.outfile, "a")
             else:
-                self.outfile = open(outfile_path, "w")
+                self.outfile = open(self.args.outfile, "w")
                 self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
-            
-            print('Filepath set to: %s', outfile_path)
+
+            print('Filepath set to: %s', self.args.outfile)
+
         except Exception as e:
-            print("Error initializing %s: %s", outfile_path, str(e))
+            print("Error initializing %s: %s", self.args.outfile, str(e))
             self.outfile = None
 
 
@@ -367,9 +376,24 @@ class Wasatch:
             self.points_ax.set_ylim(min(ys), max(ys))
             self.points_ax.set_zlim(min(zs), max(zs))
 
+        if self.scan_points:
+            colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
+            for idx, key in enumerate(['1','2','3','4','5']):
+                pt = self.scan_points.get(key)
+                if pt:
+                    self.points_ax.scatter([pt['X']], [pt['Y']], [pt['Z']], color=colors[idx], marker='^', label=f'Point {key}')
+
+
         if self.points:
             xs, ys, zs = zip(*self.points)
             self.points_ax.scatter(xs, ys, zs, c='red', marker='o')
+
+        self.points_ax.set_xlabel('X')
+        self.points_ax.set_ylabel('Y')
+        self.points_ax.set_zlabel('Z')
+        if self.scan_points:
+            self.points_ax.legend(loc='best')
+
 
         self.points_canvas.draw()
 
