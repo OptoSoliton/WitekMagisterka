@@ -61,15 +61,31 @@ class Wasatch:
 
         self.points = []
         self.scan_points = None
+        self.predicted_points = None
+
         self.position = (None, None, None)
         self.bounds = None
 
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
 
-    def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None):
+    def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None, count_x=1, count_y=1, count_z=1):
         self.bounds = (x1, x2, y1, y2, z1, z2)
         self.scan_points = points
+        self.predicted_points = []
+        try:
+            step_x = (x2 - x1) / (count_x - 1) if count_x > 1 else 0
+            step_y = (y2 - y1) / (count_y - 1) if count_y > 1 else 0
+            step_z = (z2 - z1) / (count_z - 1) if count_z > 1 else 0
+            for k in range(count_z):
+                z = z1 + k * step_z
+                for i in range(count_x):
+                    x = x1 + i * step_x
+                    for j in range(count_y):
+                        y = y1 + j * step_y
+                        self.predicted_points.append((x, y, z))
+        except Exception:
+            pass
 
         self.update_points_plot()
 
@@ -375,6 +391,9 @@ class Wasatch:
             self.points_ax.set_xlim(min(xs), max(xs))
             self.points_ax.set_ylim(min(ys), max(ys))
             self.points_ax.set_zlim(min(zs), max(zs))
+            if self.points_ax.get_zlim()[0] > self.points_ax.get_zlim()[1]:
+                self.points_ax.invert_zaxis()
+
 
         if self.scan_points:
             colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
@@ -382,6 +401,10 @@ class Wasatch:
                 pt = self.scan_points.get(key)
                 if pt:
                     self.points_ax.scatter([pt['X']], [pt['Y']], [pt['Z']], color=colors[idx], marker='^', label=f'Point {key}')
+
+        if self.predicted_points:
+            xs, ys, zs = zip(*self.predicted_points)
+            self.points_ax.scatter(xs, ys, zs, c='gray', alpha=0.3, s=10)
 
 
         if self.points:
