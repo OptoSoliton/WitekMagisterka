@@ -61,9 +61,15 @@ class Wasatch:
 
         self.points = []
         self.position = (None, None, None)
+        self.bounds = None
+
 
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
+
+    def set_scan_bounds(self, x1, x2, y1, y2, z1, z2):
+        self.bounds = (x1, x2, y1, y2, z1, z2)
+        self.update_points_plot()
 
     def parse_args(self, argv):
         parser = argparse.ArgumentParser(description="Simple demo to acquire spectra from command-line interface")
@@ -247,10 +253,7 @@ class Wasatch:
 
         if None not in self.position:
             self.points.append(self.position)
-            xs, ys, zs = zip(*self.points)
-            self.points_ax.clear()
-            self.points_ax.scatter(xs, ys, zs, c='b', marker='o')
-            self.points_canvas.draw()
+            self.update_points_plot()
 
         self.draw_graph(spectrum)
         return
@@ -339,6 +342,37 @@ class Wasatch:
                 print("Error initializing %s", self.args.outfile)
                 self.outfile = None
 
+    def update_points_plot(self):
+        self.points_ax.clear()
+        if self.bounds:
+            import itertools
+            x1, x2, y1, y2, z1, z2 = self.bounds
+            xs = [x1, x2]
+            ys = [y1, y2]
+            zs = [z1, z2]
+            corners = list(itertools.product(xs, ys, zs))
+            edges = [
+                (0,1),(0,2),(2,3),(1,3),
+                (4,5),(4,6),(6,7),(5,7),
+                (0,4),(1,5),(2,6),(3,7)
+            ]
+            for e in edges:
+                self.points_ax.plot(
+                    [corners[e[0]][0], corners[e[1]][0]],
+                    [corners[e[0]][1], corners[e[1]][1]],
+                    [corners[e[0]][2], corners[e[1]][2]],
+                    color='black'
+                )
+            self.points_ax.set_xlim(min(xs), max(xs))
+            self.points_ax.set_ylim(min(ys), max(ys))
+            self.points_ax.set_zlim(min(zs), max(zs))
+
+        if self.points:
+            xs, ys, zs = zip(*self.points)
+            self.points_ax.scatter(xs, ys, zs, c='red', marker='o')
+
+        self.points_canvas.draw()
+
     def toggle_plot(self):
         if self.graph_window.winfo_ismapped():
             self.graph_window.withdraw()  # Hide plot
@@ -349,6 +383,8 @@ class Wasatch:
         if self.points_window.winfo_ismapped():
             self.points_window.withdraw()
         else:
+            self.update_points_plot()
+
             self.points_window.deiconify()
 
 def signal_handler(signal, frame):
