@@ -161,7 +161,6 @@ class MyGUI:
         self.goto_button_5 = ttk.Button(self.position_frame, text="Go to 5", command=lambda: self.goto_position(5))
         self.goto_button_5.grid(row=2, column=3, padx=5, pady=5)
 
-
         self.test_button = ttk.Button(self.position_frame, text="Test", command=self.test_positions)
         self.test_button.grid(row=2, column=2, padx=50, pady=5)
 
@@ -608,13 +607,17 @@ class MyGUI:
         if not pos:
             self.log(f"Position {position_number} not set")
             return
-        self.serial.send_gcode('G90')
+        # move relative to current position to avoid running beyond limits
+        delta_x = pos['X'] - self.current_position['X']
+        delta_y = pos['Y'] - self.current_position['Y']
+        delta_z = pos['Z'] - self.current_position['Z']
+
+        self.serial.send_gcode('G91')
         cmd = (
-            f"G1 X{-pos['X']} Y{-pos['Y']} Z{-pos['Z']} F{self.get_speed()}"
+            f"G1 X{ -delta_x } Y{ -delta_y } Z{ -delta_z } F{self.get_speed()}"
         )
         self.serial.send_gcode(cmd)
         self.waitForCNC()
-        self.serial.send_gcode('G91')
         self.current_position = pos.copy()
         self.update_map_position(pos['X'], pos['Y'], pos['Z'])
         self.log(f"Moved to position {position_number}")
