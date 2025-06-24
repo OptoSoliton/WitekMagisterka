@@ -570,9 +570,13 @@ class MyGUI:
                 [corners[e[0]][2], corners[e[1]][2]],
                 color='black'
             )[0]
-            self.volume_lines.append(line)
+        # move relative to current position to avoid running beyond limits
+        delta_x = pos['X'] - self.current_position['X']
+        delta_y = pos['Y'] - self.current_position['Y']
+        delta_z = pos['Z'] - self.current_position['Z']
 
-        colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
+        self.serial.send_gcode('G91')
+            f"G1 X{ -delta_x } Y{ -delta_y } Z{ -delta_z } F{self.get_speed()}"
         for idx, key in enumerate(['1','2','3','4','5']):
             pt = self.user_positions.get(key)
             if pt:
