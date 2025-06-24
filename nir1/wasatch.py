@@ -51,6 +51,7 @@ class Wasatch:
         self.points_window = tk.Toplevel(self.root)
         self.points_window.title("Measured points")
         self.points_window.protocol("WM_DELETE_WINDOW", self.points_window.withdraw)
+
         self.points_fig = Figure(figsize=(4, 4), dpi=100)
         self.points_ax = self.points_fig.add_subplot(111, projection='3d')
         self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=self.points_window)
@@ -61,6 +62,7 @@ class Wasatch:
         self.points = []
         self.scan_points = None
         self.predicted_points = None
+
         self.position = (None, None, None)
         self.bounds = None
 
@@ -84,6 +86,7 @@ class Wasatch:
                         self.predicted_points.append((x, y, z))
         except Exception:
             pass
+
         self.update_points_plot()
 
     def parse_args(self, argv):
@@ -160,6 +163,7 @@ class Wasatch:
 
     def run(self, type):
         self.type = type
+        self.position = (None, None, None)
         if self.device is None:
             print("Not connected to spectrometer")
             return False
@@ -308,6 +312,7 @@ class Wasatch:
                 self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
 
             print('Filepath set to: %s', self.args.outfile)
+
         except Exception as e:
             print("Error initializing %s: %s", self.args.outfile, str(e))
             self.outfile = None
@@ -389,6 +394,7 @@ class Wasatch:
             if self.points_ax.get_zlim()[0] > self.points_ax.get_zlim()[1]:
                 self.points_ax.invert_zaxis()
 
+
         if self.scan_points:
             colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
             for idx, key in enumerate(['1','2','3','4','5']):
@@ -400,6 +406,7 @@ class Wasatch:
             xs, ys, zs = zip(*self.predicted_points)
             self.points_ax.scatter(xs, ys, zs, c='gray', alpha=0.3, s=10)
 
+
         if self.points:
             xs, ys, zs = zip(*self.points)
             self.points_ax.scatter(xs, ys, zs, c='red', marker='o')
@@ -409,6 +416,7 @@ class Wasatch:
         self.points_ax.set_zlabel('Z')
         if self.scan_points:
             self.points_ax.legend(loc='best')
+
 
         self.points_canvas.draw()
 
@@ -423,6 +431,7 @@ class Wasatch:
             self.points_window.withdraw()
         else:
             self.update_points_plot()
+
             self.points_window.deiconify()
 
 def signal_handler(signal, frame):
