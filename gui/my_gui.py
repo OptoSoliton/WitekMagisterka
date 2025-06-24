@@ -53,6 +53,7 @@ class MyGUI:
 
         self.setup_ui()
         self.running = False
+        self.paused = False
         self.measure_thread = threading.Thread()
 
     def setup_ui(self):
@@ -147,6 +148,19 @@ class MyGUI:
 
         self.set_button_5 = ttk.Button(self.position_frame, text="Set 5", command=lambda: self.set_position(5))
         self.set_button_5.grid(row=2, column=0, padx=10, pady=5)
+
+        # goto buttons
+        self.goto_button_1 = ttk.Button(self.position_frame, text="Go to 1", command=lambda: self.goto_position(1))
+        self.goto_button_1.grid(row=0, column=3, padx=5, pady=5)
+        self.goto_button_2 = ttk.Button(self.position_frame, text="Go to 2", command=lambda: self.goto_position(2))
+        self.goto_button_2.grid(row=0, column=4, padx=5, pady=5)
+        self.goto_button_3 = ttk.Button(self.position_frame, text="Go to 3", command=lambda: self.goto_position(3))
+        self.goto_button_3.grid(row=1, column=4, padx=5, pady=5)
+        self.goto_button_4 = ttk.Button(self.position_frame, text="Go to 4", command=lambda: self.goto_position(4))
+        self.goto_button_4.grid(row=1, column=3, padx=5, pady=5)
+        self.goto_button_5 = ttk.Button(self.position_frame, text="Go to 5", command=lambda: self.goto_position(5))
+        self.goto_button_5.grid(row=2, column=3, padx=5, pady=5)
+
 
         self.test_button = ttk.Button(self.position_frame, text="Test", command=self.test_positions)
         self.test_button.grid(row=2, column=2, padx=50, pady=5)
@@ -306,6 +320,21 @@ class MyGUI:
         self.wasatch_stop_button = ttk.Button(self.wasatch_measure_frame, text = "Stop", command=self.stop_measurement)
         self.wasatch_stop_button.grid(row=6, column=2, columnspan=2, padx=5, pady=5)
 
+        self.pause_button = ttk.Button(
+            self.wasatch_measure_frame,
+            text="Pause for reference",
+            command=self.pause_for_reference
+        )
+        self.pause_button.grid(row=7, column=0, columnspan=2, padx=5, pady=5)
+        self.continue_button = ttk.Button(
+            self.wasatch_measure_frame,
+            text="Continue",
+            command=self.continue_measurement,
+            state=tk.DISABLED
+        )
+        self.continue_button.grid(row=7, column=2, columnspan=2, padx=5, pady=5)
+
+
         # 3D head position and scan volume preview
         self.map_frame = ttk.LabelFrame(self.right_frame, text="Head position 3D")
         # place preview at top-right corner
@@ -338,6 +367,10 @@ class MyGUI:
     def toggle_points(self):
         if self.toggle_points_button["text"] == "Show points":
             self.toggle_points_button.config(text="Hide points")
+            if self.wasatch.predicted_points is None:
+                self.log("Calculating scan points...")
+                self.calculate_predicted_points()
+
         else:
             self.toggle_points_button.config(text="Show points")
         self.wasatch.toggle_points_window()
@@ -385,6 +418,40 @@ class MyGUI:
             self.file_path_entry.delete(0, tk.END)
             self.file_path_entry.insert(0, file_path)
             self.wasatch.set_output_file_path(file_path)
+
+    def ensure_file_path(self):
+        if self.file_path_entry.get():
+            return
+        import os, random
+        default_dir = os.path.join(os.getcwd(), "NIRv2_Witek")
+        os.makedirs(default_dir, exist_ok=True)
+        base = os.path.join(default_dir, "scan")
+        path = f"{base}.csv"
+        counter = 1
+        while os.path.exists(path):
+            path = f"{base}_{counter}.csv"
+            counter += 1
+        self.file_path_entry.insert(0, path)
+        self.wasatch.set_output_file_path(path)
+
+    def calculate_predicted_points(self):
+        try:
+            count_x = int(self.wasatch_samples_countX_entry.get())
+            count_y = int(self.wasatch_samples_countY_entry.get())
+            count_z = int(self.wasatch_samples_countZ_entry.get())
+            self.wasatch.set_scan_bounds(
+                self.user_positions['1']['X'], self.user_positions['2']['X'],
+                self.user_positions['1']['Y'], self.user_positions['4']['Y'],
+                self.user_positions['1']['Z'],
+                self.user_positions['5']['Z'] if self.user_positions['5'] else self.user_positions['1']['Z'],
+                self.user_positions,
+                count_x,
+                count_y,
+                count_z,
+            )
+            self.log("Points ready")
+        except Exception as e:
+            self.log(f"Failed to compute points: {e}")
 
     def toggle_connection(self):
         if self.serial.connected:
@@ -458,7 +525,8 @@ class MyGUI:
         # update head dot
         if self.head_dot:
             self.head_dot.remove()
-        self.head_dot = self.map_ax.scatter([x], [y], [z], c='red')
+        self.head_dot = self.map_ax.scatter([x], [y], [z], c='red', s=80, alpha=0.6)
+
 
         self.update_volume_display()
         self.map_canvas.draw()
@@ -515,6 +583,9 @@ class MyGUI:
         self.map_ax.set_xlim(min(xs), max(xs))
         self.map_ax.set_ylim(min(ys), max(ys))
         self.map_ax.set_zlim(min(zs), max(zs))
+        if self.map_ax.get_zlim()[0] > self.map_ax.get_zlim()[1]:
+            self.map_ax.invert_zaxis()
+
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
         self.map_ax.set_zlabel('Z')
@@ -531,6 +602,22 @@ class MyGUI:
             self.current_position['Y'],
             self.current_position['Z']
         )
+
+    def goto_position(self, position_number):
+        pos = self.user_positions.get(str(position_number))
+        if not pos:
+            self.log(f"Position {position_number} not set")
+            return
+        self.serial.send_gcode('G90')
+        cmd = (
+            f"G1 X{-pos['X']} Y{-pos['Y']} Z{-pos['Z']} F{self.get_speed()}"
+        )
+        self.serial.send_gcode(cmd)
+        self.waitForCNC()
+        self.serial.send_gcode('G91')
+        self.current_position = pos.copy()
+        self.update_map_position(pos['X'], pos['Y'], pos['Z'])
+        self.log(f"Moved to position {position_number}")
 
 
     def test_positions(self):
@@ -560,12 +647,14 @@ class MyGUI:
         self.serial.send_gcode('G90')
         for e in edges:
             target = corners[e[1]]
-            cmd = f"G1 X{ -target[0] } Y{ -target[1] } Z{ -target[2] } F{self.get_speed()}"
+            cmd = (
+                f"G1 X{ -target[0] } Y{ -target[1] } Z{ -target[2] } F{self.get_speed()}"
+            )
             self.serial.send_gcode(cmd)
             self.log(f"Moving to {target}")
             self.waitForCNC()
+            self.update_map_position(target[0], target[1], target[2])
         self.serial.send_gcode('G91')
-
 
     def set_position_zero(self):
         self.current_position = {'X': 0, 'Y': 0, 'Z': 0}
@@ -591,6 +680,14 @@ class MyGUI:
         self.stop_measurement()
 
         if not self.running:
+            required = ['1','2','4','5']
+            if any(self.user_positions.get(k) is None for k in required):
+                self.log('Set positions 1,2,4 and 5 first')
+                return
+            if not self.serial.connected:
+                self.log('CNC not connected')
+                return
+            self.ensure_file_path()
             self.running = True
             # New thread for measuring
             if not self.measure_thread or not self.measure_thread.is_alive():
@@ -599,8 +696,9 @@ class MyGUI:
 
     def start_measurement_once(self):
         run_once_string = self.run_once_description.get()
-        if run_once_string =='':
-            run_once_string='single measure'
+        if run_once_string == '':
+            run_once_string = 'single measure'
+        self.ensure_file_path()
         self.wasatch.init_file()
         self.log(run_once_string)
         self.wasatch.position = (None, None, None)
@@ -649,7 +747,10 @@ class MyGUI:
             self.user_positions['1']['Y'], self.user_positions['4']['Y'],
             self.user_positions['1']['Z'],
             self.user_positions['5']['Z'] if self.user_positions['5'] else self.user_positions['1']['Z'],
-            self.user_positions
+            self.user_positions,
+            self.samples_count_x,
+            self.samples_count_y,
+            self.samples_count_z
 
         )
 
@@ -667,6 +768,8 @@ class MyGUI:
                     for j in range(self.samples_count_y):
                         if not self.running:
                             break
+                        while self.paused and self.running:
+                            time.sleep(0.1)
                         new_y = self.user_positions['1']['Y'] + j * step_y
                         move_command = f'G1 X{ -new_x } Y{ -new_y } Z{ -new_z } F{self.get_speed()}'
 
@@ -717,6 +820,7 @@ class MyGUI:
             return np.interp(step, steps, times)
 
     def run_dark(self):
+        self.ensure_file_path()
         self.wasatch.init_file()
         self.log(f"Dark measure")
         self.wasatch.position = (None, None, None)
@@ -729,6 +833,7 @@ class MyGUI:
             return
         
     def run_light(self):
+        self.ensure_file_path()
         self.wasatch.init_file()
         self.log(f"Light measure")
         self.wasatch.position = (None, None, None)
@@ -739,3 +844,18 @@ class MyGUI:
             self.running = False
             self.log("Stopped. Measure from wasatch.py return False.")
             return
+
+    def pause_for_reference(self):
+        if not self.running:
+            self.log("Nothing to pause")
+            return
+        self.paused = True
+        self.continue_button.config(state=tk.NORMAL)
+        self.log("Paused. Take dark reference and optionally light, then press Continue")
+
+    def continue_measurement(self):
+        if not self.paused:
+            return
+        self.paused = False
+        self.continue_button.config(state=tk.DISABLED)
+        self.log("Resuming measurement")
