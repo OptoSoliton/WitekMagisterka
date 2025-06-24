@@ -10,7 +10,21 @@ class MyGUI:
         self.serial = serial_connection
         self.wasatch = wasatch
         self.root.title("CNC & Wasatch Controller")
-        self.root.geometry("1200x750")
+        self.root.geometry("1200x800")
+
+        # scrollable container so every widget is accessible even on small screens
+        self.canvas = tk.Canvas(self.root)
+        self.vscroll = ttk.Scrollbar(self.root, orient='vertical', command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.vscroll.set)
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.vscroll.pack(side="right", fill="y")
+
+        self.container = ttk.Frame(self.canvas)
+        self.canvas.create_window((0, 0), window=self.container, anchor='nw')
+        self.container.bind(
+            '<Configure>',
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox('all'))
+        )
 
         # Actual XYZ position
         self.current_position = {'X': 0, 'Y': 0, 'Z': 0}
@@ -24,11 +38,6 @@ class MyGUI:
             '5': None,
         }
 
-
-        # Actual XYZ position
-        self.current_position = {'X': 0, 'Y': 0, 'Z': 0}
-        # Positions 1-4 used to define scan area
-        self.user_positions = {'1': None, '2': None, '3': None, '4': None}
 
         self.integration_time = 10
         self.scans_to_average = 1
@@ -48,11 +57,11 @@ class MyGUI:
 
     def setup_ui(self):
 
-        # Left and right part of window
-        self.left_frame = ttk.PanedWindow(self.root)
+        # Left and right part of window inside scrollable container
+        self.left_frame = ttk.PanedWindow(self.container)
         self.left_frame.grid(row=0, column=0, sticky='n')
 
-        self.right_frame = ttk.PanedWindow(self.root)
+        self.right_frame = ttk.PanedWindow(self.container)
         self.right_frame.grid(row=0, column=1, sticky='n')
 
         # Serial connection frame
@@ -86,6 +95,11 @@ class MyGUI:
     
         button = ttk.Button(self.control_frame, text='\u2193', command=lambda d='\u2193': self.move(d)) # Down
         button.grid(row=2, column=1,  padx=10, pady=10)
+
+        ttk.Label(
+            self.control_frame,
+            text="←/→ = X axis, ↑/↓ = Y axis"
+        ).grid(row=3, column=0, columnspan=3, pady=(0, 5))
 
         # Z-axis control
         self.up_button = ttk.Button(self.control_frame, text="Up", command=lambda: self.move('Up'))
@@ -292,14 +306,20 @@ class MyGUI:
         self.wasatch_stop_button = ttk.Button(self.wasatch_measure_frame, text = "Stop", command=self.stop_measurement)
         self.wasatch_stop_button.grid(row=6, column=2, columnspan=2, padx=5, pady=5)
 
-        # Simple map showing current XY position
-        self.map_frame = ttk.LabelFrame(self.right_frame, text="Head position")
+        # 3D head position and scan volume preview
+        self.map_frame = ttk.LabelFrame(self.right_frame, text="Head position 3D")
         self.map_frame.grid(row=4, column=1, padx=10, pady=5)
-        self.map_canvas = tk.Canvas(self.map_frame, width=200, height=200, bg="white")
-        self.map_canvas.pack()
-        self.map_dot = self.map_canvas.create_oval(95, 95, 105, 105, fill="red")
+        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+        from matplotlib.figure import Figure
+        self.map_fig = Figure(figsize=(3.5, 3.5), dpi=100)
+        self.map_ax = self.map_fig.add_subplot(111, projection='3d')
+        self.map_canvas = FigureCanvasTkAgg(self.map_fig, master=self.map_frame)
+        self.map_canvas.draw()
+        self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=1)
         self.position_label = ttk.Label(self.map_frame, text="X:0 Y:0 Z:0")
         self.position_label.pack()
+        self.head_dot = None
+        self.volume_lines = []
 
 
     def toggle_plot(self):
@@ -398,7 +418,6 @@ class MyGUI:
             self.current_position['Z']
         )
 
-        self.update_map_position(self.current_position['X'], self.current_position['Y'])
 
     def get_step(self):
         return self.step_entry.get()
@@ -413,25 +432,61 @@ class MyGUI:
         self.log(log_message)
 
     def update_map_position(self, x, y, z=None):
+        if z is None:
+            z = self.current_position['Z']
 
-    def update_map_position(self, x, y):
+        self.position_label.config(text=f"X:{x:.1f} Y:{y:.1f} Z:{z:.1f}")
+
+        # update head dot
+        if self.head_dot:
+            self.head_dot.remove()
+        self.head_dot = self.map_ax.scatter([x], [y], [z], c='red')
+
+        self.update_volume_display()
+        self.map_canvas.draw()
+
+    def update_volume_display(self):
         try:
+            import itertools
+
             x1 = self.user_positions['1']['X']
             x2 = self.user_positions['2']['X']
             y1 = self.user_positions['1']['Y']
             y2 = self.user_positions['4']['Y']
+            z1 = self.user_positions['1']['Z']
+            z2 = self.user_positions['5']['Z']
         except Exception:
             return
 
-        if x2 - x1 == 0 or y2 - y1 == 0:
-            return
+        xs = [x1, x2]
+        ys = [y1, y2]
+        zs = [z1, z2]
 
-        canvas_x = (x - x1) / (x2 - x1) * 200
-        canvas_y = (y - y1) / (y2 - y1) * 200
-        self.map_canvas.coords(self.map_dot, canvas_x-5, canvas_y-5, canvas_x+5, canvas_y+5)
-        if z is None:
-            z = self.current_position['Z']
-        self.position_label.config(text=f"X:{x:.1f} Y:{y:.1f} Z:{z:.1f}")
+        corners = list(itertools.product(xs, ys, zs))
+        edges = [
+            (0,1),(0,2),(2,3),(1,3),
+            (4,5),(4,6),(6,7),(5,7),
+            (0,4),(1,5),(2,6),(3,7)
+        ]
+
+        for line in self.volume_lines:
+            line.remove()
+        self.volume_lines = []
+
+        for e in edges:
+            line = self.map_ax.plot(
+                [corners[e[0]][0], corners[e[1]][0]],
+                [corners[e[0]][1], corners[e[1]][1]],
+                [corners[e[0]][2], corners[e[1]][2]],
+                color='black'
+            )[0]
+            self.volume_lines.append(line)
+
+        self.map_ax.set_xlim(min(xs), max(xs))
+        self.map_ax.set_ylim(min(ys), max(ys))
+        self.map_ax.set_zlim(min(zs), max(zs))
+
+
 
     def set_position(self, position_number):
         self.user_positions[str(position_number)] = self.current_position.copy()
@@ -444,10 +499,6 @@ class MyGUI:
             self.current_position['Z']
         )
 
-
-    def set_position(self, position_number):
-        self.user_positions[str(position_number)] = self.current_position.copy()
-        self.log(f"Position {position_number} set to X:{self.current_position['X']}, Y:{self.current_position['Y']}, Z:{self.current_position['Z']}.")
 
     def test_positions(self):
         # Move to the initial position 0,0 first
@@ -480,9 +531,6 @@ class MyGUI:
         self.log("Current position set as 0,0,0.")
         self.update_map_position(0, 0, 0)
 
-        self.log("Current position set as 0,0.")
-        self.update_map_position(0, 0)
-
     def move_to_zero(self):
         init_commands = [
             'G90',
@@ -496,7 +544,6 @@ class MyGUI:
         self.log("Complete.")
         self.update_map_position(0, 0, 0)
 
-        self.update_map_position(0, 0)
 
     def start_measurement(self):
         self.stop_measurement()
@@ -537,17 +584,30 @@ class MyGUI:
         step_x = (self.user_positions['2']['X'] - self.user_positions['1']['X']) / (self.samples_count_x - 1)
         step_y = (self.user_positions['4']['Y'] - self.user_positions['1']['Y']) / (self.samples_count_y - 1)
         step_z = 0
-        if self.samples_count_z > 1:
+        if self.samples_count_z > 1 and self.user_positions['5'] is not None:
             step_z = (self.user_positions['5']['Z'] - self.user_positions['1']['Z']) / (self.samples_count_z - 1)
-
-            step_z = (self.user_positions['3']['Z'] - self.user_positions['1']['Z']) / (self.samples_count_z - 1)
 
         # Turn cnc into start point (0,0)
         self.serial.send_gcode('G90')
-        move_command = f'G1 X-{self.user_positions["1"]["X"]} Y{self.user_positions["1"]["Y"]} Z-{self.user_positions["1"]["Z"]} F{self.get_speed()}'
+        move_command = (
+            f'G1 X-{self.user_positions["1"]["X"]} '
+            f'Y{self.user_positions["1"]["Y"]} '
+            f'Z-{self.user_positions["1"]["Z"]} F{self.get_speed()}'
+        )
+
         self.serial.send_gcode(move_command)
-        self.log("Moving to start position")
+        self.log(
+            f"Moving to start position X: {self.user_positions['1']['X']}, "
+            f"Y: {self.user_positions['1']['Y']}, Z: {self.user_positions['1']['Z']}"
+        )
         self.waitForCNC()
+
+        self.wasatch.set_scan_bounds(
+            self.user_positions['1']['X'], self.user_positions['2']['X'],
+            self.user_positions['1']['Y'], self.user_positions['4']['Y'],
+            self.user_positions['1']['Z'],
+            self.user_positions['5']['Z'] if self.user_positions['5'] else self.user_positions['1']['Z']
+        )
 
         current_measure = 0
         measure_count = self.samples_count_x * self.samples_count_y * self.samples_count_z
@@ -576,7 +636,6 @@ class MyGUI:
                         current_measure += 1
                         self.update_map_position(new_x, new_y, new_z)
 
-                        self.update_map_position(new_x, new_y)
                         self.log(f"Measure {current_measure} out of {measure_count}.")
                         finished = self.wasatch.run_with_position("scan", new_x, new_y, new_z)
                         progress = int((current_measure / measure_count) * 100)
