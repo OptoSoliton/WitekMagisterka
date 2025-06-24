@@ -51,6 +51,7 @@ class Wasatch:
         self.points_window = tk.Toplevel(self.root)
         self.points_window.title("Measured points")
         self.points_window.protocol("WM_DELETE_WINDOW", self.points_window.withdraw)
+
         self.points_fig = Figure(figsize=(4, 4), dpi=100)
         self.points_ax = self.points_fig.add_subplot(111, projection='3d')
         self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=self.points_window)
@@ -61,6 +62,7 @@ class Wasatch:
         self.points = []
         self.position = (None, None, None)
         self.bounds = None
+
 
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
@@ -143,6 +145,7 @@ class Wasatch:
 
     def run(self, type):
         self.type = type
+        self.position = (None, None, None)
         if self.device is None:
             print("Not connected to spectrometer")
             return False
@@ -381,6 +384,7 @@ class Wasatch:
             self.points_window.withdraw()
         else:
             self.update_points_plot()
+
             self.points_window.deiconify()
 
 def signal_handler(signal, frame):

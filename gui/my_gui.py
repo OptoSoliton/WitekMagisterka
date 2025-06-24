@@ -38,6 +38,7 @@ class MyGUI:
             '5': None,
         }
 
+
         self.integration_time = 10
         self.scans_to_average = 1
         self.boxcar_half_width = 0
@@ -320,6 +321,7 @@ class MyGUI:
         self.head_dot = None
         self.volume_lines = []
 
+
     def toggle_plot(self):
         if self.toggle_plot_button["text"] == "Show plot":
             self.toggle_plot_button.config(text="Hide plot")
@@ -416,6 +418,7 @@ class MyGUI:
             self.current_position['Z']
         )
 
+
     def get_step(self):
         return self.step_entry.get()
 
@@ -445,6 +448,7 @@ class MyGUI:
     def update_volume_display(self):
         try:
             import itertools
+
             x1 = self.user_positions['1']['X']
             x2 = self.user_positions['2']['X']
             y1 = self.user_positions['1']['Y']
@@ -483,6 +487,7 @@ class MyGUI:
         self.map_ax.set_zlim(min(zs), max(zs))
 
 
+
     def set_position(self, position_number):
         self.user_positions[str(position_number)] = self.current_position.copy()
         self.log(
@@ -493,6 +498,7 @@ class MyGUI:
             self.current_position['Y'],
             self.current_position['Z']
         )
+
 
     def test_positions(self):
         # Move to the initial position 0,0 first
@@ -537,6 +543,7 @@ class MyGUI:
 
         self.log("Complete.")
         self.update_map_position(0, 0, 0)
+
 
     def start_measurement(self):
         self.stop_measurement()
@@ -587,6 +594,7 @@ class MyGUI:
             f'Y{self.user_positions["1"]["Y"]} '
             f'Z-{self.user_positions["1"]["Z"]} F{self.get_speed()}'
         )
+
         self.serial.send_gcode(move_command)
         self.log(
             f"Moving to start position X: {self.user_positions['1']['X']}, "
@@ -627,6 +635,7 @@ class MyGUI:
                             isChangedX = False
                         current_measure += 1
                         self.update_map_position(new_x, new_y, new_z)
+
                         self.log(f"Measure {current_measure} out of {measure_count}.")
                         finished = self.wasatch.run_with_position("scan", new_x, new_y, new_z)
                         progress = int((current_measure / measure_count) * 100)
