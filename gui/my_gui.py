@@ -208,6 +208,9 @@ class MyGUI:
         self.file_path_button = ttk.Button(self.file_path_frame, text="Browse", command=self.browse_file_path)
         self.file_path_button.grid(row=0, column=2, padx=10, pady=10)
 
+        # Generate default output path on startup
+        self.ensure_file_path()
+
         # Wasatch parameters
         self.wasatch_parameters_frame = ttk.LabelFrame(self.right_frame, text="Parameters")
         self.wasatch_parameters_frame.grid(row=2, column=1, padx=10, pady=5, sticky="ew")
@@ -614,14 +617,15 @@ class MyGUI:
 
         self.serial.send_gcode('G91')
         cmd = (
-            f"G1 X{ -delta_x } Y{ -delta_y } Z{ -delta_z } F{self.get_speed()}"
+            f"G1 X{ -delta_x } Y{ -delta_y } Z{ delta_z } F{self.get_speed()}"
+
         )
         self.serial.send_gcode(cmd)
         self.waitForCNC()
         self.current_position = pos.copy()
         self.update_map_position(pos['X'], pos['Y'], pos['Z'])
         self.log(f"Moved to position {position_number}")
-n
+
 
     def test_positions(self):
         """Move along all edges of the defined volume."""
@@ -651,7 +655,8 @@ n
         for e in edges:
             target = corners[e[1]]
             cmd = (
-                f"G1 X{ -target[0] } Y{ -target[1] } Z{ -target[2] } F{self.get_speed()}"
+                f"G1 X{ -target[0] } Y{ -target[1] } Z{ target[2] } F{self.get_speed()}"
+
             )
             self.serial.send_gcode(cmd)
             self.log(f"Moving to {target}")
@@ -735,7 +740,7 @@ n
         move_command = (
             f'G1 X{ -self.user_positions["1"]["X"] } '
             f'Y{ -self.user_positions["1"]["Y"] } '
-            f'Z{ -self.user_positions["1"]["Z"] } F{self.get_speed()}'
+            f'Z{ self.user_positions["1"]["Z"] } F{self.get_speed()}'
         )
 
         self.serial.send_gcode(move_command)
@@ -774,7 +779,7 @@ n
                         while self.paused and self.running:
                             time.sleep(0.1)
                         new_y = self.user_positions['1']['Y'] + j * step_y
-                        move_command = f'G1 X{ -new_x } Y{ -new_y } Z{ -new_z } F{self.get_speed()}'
+                        move_command = f'G1 X{ -new_x } Y{ -new_y } Z{ new_z } F{self.get_speed()}'
 
                         self.serial.send_gcode(move_command)
                         self.log(f"Moving to position X: {new_x}, Y: {new_y}, Z: {new_z}")
