@@ -37,6 +37,7 @@ class MyGUI:
             '4': None,
             '5': None,
         }
+        self.dark_taken = False
 
 
         self.integration_time = 10
@@ -336,6 +337,27 @@ class MyGUI:
         )
         self.continue_button.grid(row=7, column=2, columnspan=2, padx=5, pady=5)
 
+        # list of widgets disabled during a long scan
+        self.disable_on_run = [
+            self.connect_button,
+            self.up_button,
+            self.down_button,
+            self.manual_command_button,
+            self.zero_button,
+            self.set_button_1,
+            self.set_button_2,
+            self.set_button_3,
+            self.set_button_4,
+            self.set_button_5,
+            self.goto_button_1,
+            self.goto_button_2,
+            self.goto_button_3,
+            self.goto_button_4,
+            self.goto_button_5,
+            self.test_button,
+            self.init_button,
+        ]
+
 
         # 3D head position and scan volume preview
         self.map_frame = ttk.LabelFrame(self.right_frame, text="Head position 3D")
@@ -357,6 +379,23 @@ class MyGUI:
 
         self.help_button = ttk.Button(self.right_frame, text="Help", command=self.show_help)
         self.help_button.grid(row=5, column=1, padx=10, pady=5, sticky="ew")
+
+    def disable_controls(self):
+        for w in self.disable_on_run:
+            w.config(state=tk.DISABLED)
+        for frame in [self.control_frame, self.step_speed_frame]:
+            for child in frame.winfo_children():
+                child.config(state=tk.DISABLED)
+        self.pause_button.config(state=tk.NORMAL)
+
+    def enable_controls(self):
+        for w in self.disable_on_run:
+            w.config(state=tk.NORMAL)
+        for frame in [self.control_frame, self.step_speed_frame]:
+            for child in frame.winfo_children():
+                child.config(state=tk.NORMAL)
+        self.pause_button.config(state=tk.DISABLED)
+        self.continue_button.config(state=tk.DISABLED)
 
 
     def toggle_plot(self):
@@ -585,8 +624,7 @@ class MyGUI:
         self.map_ax.set_xlim(min(xs), max(xs))
         self.map_ax.set_ylim(min(ys), max(ys))
         self.map_ax.set_zlim(min(zs), max(zs))
-        if self.map_ax.get_zlim()[0] > self.map_ax.get_zlim()[1]:
-            self.map_ax.invert_zaxis()
+        self.map_ax.invert_zaxis()
 
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
@@ -697,6 +735,7 @@ class MyGUI:
                 return
             self.ensure_file_path()
             self.running = True
+            self.disable_controls()
             # New thread for measuring
             if not self.measure_thread or not self.measure_thread.is_alive():
                 self.measure_thread = threading.Thread(target=self.measure_and_move)
@@ -713,14 +752,15 @@ class MyGUI:
         finished = self.wasatch.run(run_once_string)
         self.wasatch.close_file()
 
-
         if finished == False:
             self.running = False
             self.log("Stopped. Measure from wasatch.py return False.")
-            return
+        self.enable_controls()
+        return
 
     def stop_measurement(self):
         self.running = False
+        self.enable_controls()
 
     def measure_and_move(self):
         self.update_progress(0)
@@ -829,26 +869,36 @@ class MyGUI:
 
     def run_dark(self):
         self.ensure_file_path()
-        self.wasatch.init_file()
+        if self.wasatch.outfile is None or self.wasatch.outfile.closed:
+            self.wasatch.init_file()
         self.log(f"Dark measure")
-        self.wasatch.position = (None, None, None)
-        finished = self.wasatch.run("dark")
-        self.wasatch.close_file()
+        pos = (
+            self.current_position['X'],
+            self.current_position['Y'],
+            self.current_position['Z'],
+        )
+        finished = self.wasatch.run_with_position("dark", *pos)
+        if finished is False:
 
-        if finished == False:
             self.running = False
             self.log("Stopped. Measure from wasatch.py return False.")
             return
-        
+        self.dark_taken = True
+        self.continue_button.config(state=tk.NORMAL)
+
     def run_light(self):
         self.ensure_file_path()
-        self.wasatch.init_file()
+        if self.wasatch.outfile is None or self.wasatch.outfile.closed:
+            self.wasatch.init_file()
         self.log(f"Light measure")
-        self.wasatch.position = (None, None, None)
-        finished = self.wasatch.run("light")
-        self.wasatch.close_file()
+        pos = (
+            self.current_position['X'],
+            self.current_position['Y'],
+            self.current_position['Z'],
+        )
+        finished = self.wasatch.run_with_position("light", *pos)
+        if finished is False:
 
-        if finished == False:
             self.running = False
             self.log("Stopped. Measure from wasatch.py return False.")
             return
@@ -858,12 +908,18 @@ class MyGUI:
             self.log("Nothing to pause")
             return
         self.paused = True
-        self.continue_button.config(state=tk.NORMAL)
+        self.dark_taken = False
+        self.continue_button.config(state=tk.DISABLED)
+
         self.log("Paused. Take dark reference and optionally light, then press Continue")
 
     def continue_measurement(self):
         if not self.paused:
             return
+        if not self.dark_taken:
+            self.log("Take dark reference before continuing")
+            return
+
         self.paused = False
         self.continue_button.config(state=tk.DISABLED)
         self.log("Resuming measurement")

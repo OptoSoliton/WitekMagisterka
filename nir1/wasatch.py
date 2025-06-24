@@ -391,8 +391,7 @@ class Wasatch:
             self.points_ax.set_xlim(min(xs), max(xs))
             self.points_ax.set_ylim(min(ys), max(ys))
             self.points_ax.set_zlim(min(zs), max(zs))
-            if self.points_ax.get_zlim()[0] > self.points_ax.get_zlim()[1]:
-                self.points_ax.invert_zaxis()
+            self.points_ax.invert_zaxis()
 
 
         if self.scan_points:
@@ -405,7 +404,6 @@ class Wasatch:
         if self.predicted_points:
             xs, ys, zs = zip(*self.predicted_points)
             self.points_ax.scatter(xs, ys, zs, c='gray', alpha=0.3, s=10)
-
 
         if self.points:
             xs, ys, zs = zip(*self.points)
