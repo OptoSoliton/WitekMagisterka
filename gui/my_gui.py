@@ -3,6 +3,8 @@ from tkinter import ttk, scrolledtext, filedialog
 import time
 import threading
 import numpy as np
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
+from matplotlib.figure import Figure
 
 class MyGUI:
     def __init__(self, root, serial_connection, wasatch):
@@ -37,6 +39,7 @@ class MyGUI:
             '4': None,
             '5': None,
         }
+        self.dark_taken = False
 
 
         self.integration_time = 10
@@ -287,6 +290,13 @@ class MyGUI:
         self.wasatch_samples_countZ_entry.grid(row=2, column=2, padx=10, pady=5)
         self.wasatch_samples_countZ_entry.insert(tk.END, '1')  # Default value
 
+        for entry in (
+            self.wasatch_samples_countX_entry,
+            self.wasatch_samples_countY_entry,
+            self.wasatch_samples_countZ_entry,
+        ):
+            entry.bind("<KeyRelease>", lambda e: self.calculate_predicted_points())
+
         self.wasatch_dark_button = ttk.Button(self.wasatch_measure_frame, text = "Dark", command=self.run_dark)
         self.wasatch_dark_button.grid(row=3, column=0, columnspan=2, padx=5, pady=5)
 
@@ -296,8 +306,6 @@ class MyGUI:
         self.toggle_plot_button = ttk.Button(self.wasatch_measure_frame, text="Show plot", command=self.toggle_plot)
         self.toggle_plot_button.grid(row=3, column=2, columnspan=2, padx=5, pady=5)
 
-        self.toggle_points_button = ttk.Button(self.wasatch_measure_frame, text="Show points", command=self.toggle_points)
-        self.toggle_points_button.grid(row=3, column=4, columnspan=2, padx=5, pady=5)
 
         # Progress bar
         self.progress_bar = ttk.Progressbar(self.wasatch_measure_frame, orient="horizontal", length=300,  mode="determinate")
@@ -336,27 +344,71 @@ class MyGUI:
         )
         self.continue_button.grid(row=7, column=2, columnspan=2, padx=5, pady=5)
 
+        # list of widgets disabled during a long scan
+        self.disable_on_run = [
+            self.connect_button,
+            self.up_button,
+            self.down_button,
+            self.manual_command_button,
+            self.zero_button,
+            self.set_button_1,
+            self.set_button_2,
+            self.set_button_3,
+            self.set_button_4,
+            self.set_button_5,
+            self.goto_button_1,
+            self.goto_button_2,
+            self.goto_button_3,
+            self.goto_button_4,
+            self.goto_button_5,
+            self.test_button,
+            self.init_button,
+        ]
 
-        # 3D head position and scan volume preview
+        # 3D head position preview
         self.map_frame = ttk.LabelFrame(self.right_frame, text="Head position 3D")
-        # place preview at top-right corner
-        self.map_frame.grid(row=0, column=2, rowspan=5, padx=10, pady=5, sticky="ne")
+        self.map_frame.grid(row=0, column=2, padx=10, pady=5, sticky="ne")
 
-        from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-        from matplotlib.figure import Figure
         self.map_fig = Figure(figsize=(3.5, 3.5), dpi=100)
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
         self.map_canvas = FigureCanvasTkAgg(self.map_fig, master=self.map_frame)
         self.map_canvas.draw()
         self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=1)
+        self.map_toolbar = NavigationToolbar2Tk(self.map_canvas, self.map_frame)
+        self.map_toolbar.update()
+
         self.position_label = ttk.Label(self.map_frame, text="X:0 Y:0 Z:0")
         self.position_label.pack()
         self.head_dot = None
         self.volume_lines = []
         self.point_dots = []
 
+        # Points preview under head position
+        self.points_frame = ttk.LabelFrame(self.right_frame, text="Scan points")
+        self.points_frame.grid(row=1, column=2, padx=10, pady=5, sticky="ne")
+        self.wasatch.init_points_plot(self.points_frame)
+
         self.help_button = ttk.Button(self.right_frame, text="Help", command=self.show_help)
         self.help_button.grid(row=5, column=1, padx=10, pady=5, sticky="ew")
+
+        self.calculate_predicted_points()
+
+    def disable_controls(self):
+        for w in self.disable_on_run:
+            w.config(state=tk.DISABLED)
+        for frame in [self.control_frame, self.step_speed_frame]:
+            for child in frame.winfo_children():
+                child.config(state=tk.DISABLED)
+        self.pause_button.config(state=tk.NORMAL)
+
+    def enable_controls(self):
+        for w in self.disable_on_run:
+            w.config(state=tk.NORMAL)
+        for frame in [self.control_frame, self.step_speed_frame]:
+            for child in frame.winfo_children():
+                child.config(state=tk.NORMAL)
+        self.pause_button.config(state=tk.DISABLED)
+        self.continue_button.config(state=tk.DISABLED)
 
 
     def toggle_plot(self):
@@ -366,16 +418,6 @@ class MyGUI:
             self.toggle_plot_button.config(text="Show plot")
         self.wasatch.toggle_plot()
 
-    def toggle_points(self):
-        if self.toggle_points_button["text"] == "Show points":
-            self.toggle_points_button.config(text="Hide points")
-            if self.wasatch.predicted_points is None:
-                self.log("Calculating scan points...")
-                self.calculate_predicted_points()
-
-        else:
-            self.toggle_points_button.config(text="Show points")
-        self.wasatch.toggle_points_window()
 
     def show_help(self):
         from tkinter import messagebox
@@ -441,19 +483,34 @@ class MyGUI:
             count_x = int(self.wasatch_samples_countX_entry.get())
             count_y = int(self.wasatch_samples_countY_entry.get())
             count_z = int(self.wasatch_samples_countZ_entry.get())
+        except ValueError:
+            return
+
+        # update plot with reference points even if bounds incomplete
+        if not all(self.user_positions.get(k) for k in ['1','2','4']):
+            self.wasatch.scan_points = self.user_positions
+            self.wasatch.update_points_plot()
+            return
+
+        z_top = self.user_positions['5']['Z'] if self.user_positions['5'] else self.user_positions['1']['Z']
+        try:
+
             self.wasatch.set_scan_bounds(
                 self.user_positions['1']['X'], self.user_positions['2']['X'],
                 self.user_positions['1']['Y'], self.user_positions['4']['Y'],
                 self.user_positions['1']['Z'],
-                self.user_positions['5']['Z'] if self.user_positions['5'] else self.user_positions['1']['Z'],
+                z_top,
+
                 self.user_positions,
                 count_x,
                 count_y,
                 count_z,
             )
             self.log("Points ready")
-        except Exception as e:
-            self.log(f"Failed to compute points: {e}")
+        except Exception:
+            self.wasatch.scan_points = self.user_positions
+            self.wasatch.update_points_plot()
+
 
     def toggle_connection(self):
         if self.serial.connected:
@@ -529,33 +586,15 @@ class MyGUI:
             self.head_dot.remove()
         self.head_dot = self.map_ax.scatter([x], [y], [z], c='red', s=80, alpha=0.6)
 
-
+        self.wasatch.position = (x, y, z)
         self.update_volume_display()
         self.map_canvas.draw()
+        self.wasatch.update_points_plot()
 
     def update_volume_display(self):
-        try:
-            import itertools
+        import itertools
 
-            x1 = self.user_positions['1']['X']
-            x2 = self.user_positions['2']['X']
-            y1 = self.user_positions['1']['Y']
-            y2 = self.user_positions['4']['Y']
-            z1 = self.user_positions['1']['Z']
-            z2 = self.user_positions['5']['Z']
-        except Exception:
-            return
-
-        xs = [x1, x2]
-        ys = [y1, y2]
-        zs = [z1, z2]
-
-        corners = list(itertools.product(xs, ys, zs))
-        edges = [
-            (0,1),(0,2),(2,3),(1,3),
-            (4,5),(4,6),(6,7),(5,7),
-            (0,4),(1,5),(2,6),(3,7)
-        ]
+        # clear previous drawings
 
         for line in self.volume_lines:
             line.remove()
@@ -564,29 +603,53 @@ class MyGUI:
             dot.remove()
         self.point_dots = []
 
-
-        for e in edges:
-            line = self.map_ax.plot(
-                [corners[e[0]][0], corners[e[1]][0]],
-                [corners[e[0]][1], corners[e[1]][1]],
-                [corners[e[0]][2], corners[e[1]][2]],
-                color='black'
-            )[0]
-            self.volume_lines.append(line)
-
+        # draw reference points if any
         colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
+        xs = []
+        ys = []
+        zs = []
         for idx, key in enumerate(['1','2','3','4','5']):
             pt = self.user_positions.get(key)
             if pt:
+                xs.append(pt['X'])
+                ys.append(pt['Y'])
+                zs.append(pt['Z'])
+
                 dot = self.map_ax.scatter([pt['X']], [pt['Y']], [pt['Z']], color=colors[idx], marker='o')
                 self.map_ax.text(pt['X'], pt['Y'], pt['Z'], f"{key}")
                 self.point_dots.append(dot)
 
-        self.map_ax.set_xlim(min(xs), max(xs))
-        self.map_ax.set_ylim(min(ys), max(ys))
-        self.map_ax.set_zlim(min(zs), max(zs))
-        if self.map_ax.get_zlim()[0] > self.map_ax.get_zlim()[1]:
-            self.map_ax.invert_zaxis()
+        # draw volume if all bounding points are set
+        if all(self.user_positions.get(k) for k in ['1','2','4','5']):
+            x1 = self.user_positions['1']['X']
+            x2 = self.user_positions['2']['X']
+            y1 = self.user_positions['1']['Y']
+            y2 = self.user_positions['4']['Y']
+            z1 = self.user_positions['1']['Z']
+            z2 = self.user_positions['5']['Z']
+            xs.extend([x1, x2])
+            ys.extend([y1, y2])
+            zs.extend([z1, z2])
+            corners = list(itertools.product([x1, x2], [y1, y2], [z1, z2]))
+            edges = [
+                (0,1),(0,2),(2,3),(1,3),
+                (4,5),(4,6),(6,7),(5,7),
+                (0,4),(1,5),(2,6),(3,7)
+            ]
+            for e in edges:
+                line = self.map_ax.plot(
+                    [corners[e[0]][0], corners[e[1]][0]],
+                    [corners[e[0]][1], corners[e[1]][1]],
+                    [corners[e[0]][2], corners[e[1]][2]],
+                    color='black'
+                )[0]
+                self.volume_lines.append(line)
+
+        if xs and ys and zs:
+            self.map_ax.set_xlim(min(xs), max(xs))
+            self.map_ax.set_ylim(min(ys), max(ys))
+            self.map_ax.set_zlim(min(zs), max(zs))
+        self.map_ax.invert_zaxis()
 
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
@@ -604,6 +667,8 @@ class MyGUI:
             self.current_position['Y'],
             self.current_position['Z']
         )
+        self.calculate_predicted_points()
+
 
     def goto_position(self, position_number):
         pos = self.user_positions.get(str(position_number))
@@ -617,7 +682,7 @@ class MyGUI:
 
         self.serial.send_gcode('G91')
         cmd = (
-            f"G1 X{ -delta_x } Y{ -delta_y } Z{ -delta_z } F{self.get_speed()}"
+            f"G1 X{ -delta_x } Y{ -delta_y } Z{ delta_z } F{self.get_speed()}"
 
         )
         self.serial.send_gcode(cmd)
@@ -655,7 +720,7 @@ class MyGUI:
         for e in edges:
             target = corners[e[1]]
             cmd = (
-                f"G1 X{ -target[0] } Y{ -target[1] } Z{ -target[2] } F{self.get_speed()}"
+                f"G1 X{ -target[0] } Y{ -target[1] } Z{ target[2] } F{self.get_speed()}"
 
             )
             self.serial.send_gcode(cmd)
@@ -688,9 +753,14 @@ class MyGUI:
         self.stop_measurement()
 
         if not self.running:
-            required = ['1','2','4','5']
-            if any(self.user_positions.get(k) is None for k in required):
-                self.log('Set positions 1,2,4 and 5 first')
+            # determine which reference points are required
+            samples_z = int(self.wasatch_samples_countZ_entry.get())
+            required = ['1', '2', '4']
+            if samples_z > 1:
+                required.append('5')
+            missing = [k for k in required if self.user_positions.get(k) is None]
+            if missing:
+                self.log('Set positions ' + ','.join(missing) + ' first')
 
                 return
             if not self.serial.connected:
@@ -724,6 +794,8 @@ class MyGUI:
     def stop_measurement(self):
         self.running = False
         self.enable_controls()
+        self.update_progress(0)
+
 
     def measure_and_move(self):
         self.update_progress(0)
@@ -743,7 +815,7 @@ class MyGUI:
         move_command = (
             f'G1 X{ -self.user_positions["1"]["X"] } '
             f'Y{ -self.user_positions["1"]["Y"] } '
-            f'Z{ -self.user_positions["1"]["Z"] } F{self.get_speed()}'
+            f'Z{ self.user_positions["1"]["Z"] } F{self.get_speed()}'
         )
 
         self.serial.send_gcode(move_command)
@@ -753,6 +825,8 @@ class MyGUI:
         )
         self.waitForCNC()
 
+        total_points = self.samples_count_x * self.samples_count_y * self.samples_count_z
+        self.log(f"Generating {total_points} scan points")
 
         self.wasatch.set_scan_bounds(
             self.user_positions['1']['X'], self.user_positions['2']['X'],
@@ -762,11 +836,15 @@ class MyGUI:
             self.user_positions,
             self.samples_count_x,
             self.samples_count_y,
-            self.samples_count_z
+            self.samples_count_z,
+            progress_cb=self.update_progress,
+            log_cb=self.log,
         )
+        self.log("Points ready")
+        self.update_progress(0)
 
         current_measure = 0
-        measure_count = self.samples_count_x * self.samples_count_y * self.samples_count_z
+        measure_count = total_points
 
 
         self.wasatch.init_file()
@@ -783,7 +861,7 @@ class MyGUI:
                         while self.paused and self.running:
                             time.sleep(0.1)
                         new_y = self.user_positions['1']['Y'] + j * step_y
-                        move_command = f'G1 X{ -new_x } Y{ -new_y } Z{ -new_z } F{self.get_speed()}'
+                        move_command = f'G1 X{ -new_x } Y{ -new_y } Z{ new_z } F{self.get_speed()}'
 
                         self.serial.send_gcode(move_command)
                         self.log(f"Moving to position X: {new_x}, Y: {new_y}, Z: {new_z}")
@@ -833,12 +911,16 @@ class MyGUI:
 
     def run_dark(self):
         self.ensure_file_path()
-        self.wasatch.init_file()
+        if self.wasatch.outfile is None or self.wasatch.outfile.closed:
+            self.wasatch.init_file()
         self.log(f"Dark measure")
-        self.wasatch.position = (None, None, None)
-        finished = self.wasatch.run("dark")
-        self.wasatch.close_file()
-
+        pos = (
+            self.current_position['X'],
+            self.current_position['Y'],
+            self.current_position['Z'],
+        )
+        finished = self.wasatch.run_with_position("dark", *pos)
+        if finished is False:
 
             self.running = False
             self.log("Stopped. Measure from wasatch.py return False.")
@@ -848,12 +930,16 @@ class MyGUI:
 
     def run_light(self):
         self.ensure_file_path()
-        self.wasatch.init_file()
+        if self.wasatch.outfile is None or self.wasatch.outfile.closed:
+            self.wasatch.init_file()
         self.log(f"Light measure")
-        self.wasatch.position = (None, None, None)
-        finished = self.wasatch.run("light")
-        self.wasatch.close_file()
-
+        pos = (
+            self.current_position['X'],
+            self.current_position['Y'],
+            self.current_position['Z'],
+        )
+        finished = self.wasatch.run_with_position("light", *pos)
+        if finished is False:
 
             self.running = False
             self.log("Stopped. Measure from wasatch.py return False.")
@@ -864,12 +950,16 @@ class MyGUI:
             self.log("Nothing to pause")
             return
         self.paused = True
-        self.continue_button.config(state=tk.NORMAL)
+        self.dark_taken = False
+        self.continue_button.config(state=tk.DISABLED)
 
         self.log("Paused. Take dark reference and optionally light, then press Continue")
 
     def continue_measurement(self):
         if not self.paused:
+            return
+        if not self.dark_taken:
+            self.log("Take dark reference before continuing")
             return
 
         self.paused = False
