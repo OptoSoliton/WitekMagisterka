@@ -3,8 +3,8 @@ from tkinter import ttk, scrolledtext, filedialog
 import time
 import threading
 import numpy as np
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-from matplotlib.figure import Figure
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+
 
 class MyGUI:
     def __init__(self, root, serial_connection, wasatch):
@@ -62,10 +62,11 @@ class MyGUI:
     def setup_ui(self):
 
         # Left and right part of window inside scrollable container
-        self.left_frame = ttk.PanedWindow(self.container)
+        self.left_frame = ttk.Frame(self.container)
         self.left_frame.grid(row=0, column=0, sticky='n')
 
-        self.right_frame = ttk.PanedWindow(self.container)
+        self.right_frame = ttk.Frame(self.container)
+
         self.right_frame.grid(row=0, column=1, sticky='n')
 
         # Serial connection frame
@@ -297,14 +298,15 @@ class MyGUI:
         ):
             entry.bind("<KeyRelease>", lambda e: self.calculate_predicted_points())
 
-        self.wasatch_dark_button = ttk.Button(self.wasatch_measure_frame, text = "Dark", command=self.run_dark)
+        self.wasatch_dark_button = ttk.Button(
+            self.wasatch_measure_frame, text="Dark", command=self.run_dark
+        )
         self.wasatch_dark_button.grid(row=3, column=0, columnspan=2, padx=5, pady=5)
 
-        self.wasatch_light_button = ttk.Button(self.wasatch_measure_frame, text = "Light", command=self.run_light)
-        self.wasatch_light_button.grid(row=3, column=1, columnspan=2, padx=5, pady=5)
-
-        self.toggle_plot_button = ttk.Button(self.wasatch_measure_frame, text="Show plot", command=self.toggle_plot)
-        self.toggle_plot_button.grid(row=3, column=2, columnspan=2, padx=5, pady=5)
+        self.wasatch_light_button = ttk.Button(
+            self.wasatch_measure_frame, text="Light", command=self.run_light
+        )
+        self.wasatch_light_button.grid(row=3, column=2, columnspan=2, padx=5, pady=5)
 
 
         # Progress bar
@@ -365,18 +367,16 @@ class MyGUI:
             self.init_button,
         ]
 
+
         # 3D head position preview
         self.map_frame = ttk.LabelFrame(self.right_frame, text="Head position 3D")
         self.map_frame.grid(row=0, column=2, padx=10, pady=5, sticky="ne")
-
-        self.map_fig = Figure(figsize=(3.5, 3.5), dpi=100)
+        self.map_fig = Figure(figsize=(2.5, 2.5), dpi=100)
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
         self.map_canvas = FigureCanvasTkAgg(self.map_fig, master=self.map_frame)
         self.map_canvas.draw()
-        self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=1)
-        self.map_toolbar = NavigationToolbar2Tk(self.map_canvas, self.map_frame)
-        self.map_toolbar.update()
-
+        self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
+        self.map_canvas.mpl_connect('scroll_event', lambda e: None)
         self.position_label = ttk.Label(self.map_frame, text="X:0 Y:0 Z:0")
         self.position_label.pack()
         self.head_dot = None
@@ -387,6 +387,11 @@ class MyGUI:
         self.points_frame = ttk.LabelFrame(self.right_frame, text="Scan points")
         self.points_frame.grid(row=1, column=2, padx=10, pady=5, sticky="ne")
         self.wasatch.init_points_plot(self.points_frame)
+
+        # Spectrum plot below scan points
+        self.spectrum_frame = ttk.LabelFrame(self.right_frame, text="Spectrum")
+        self.spectrum_frame.grid(row=2, column=2, padx=10, pady=5, sticky="ne")
+        self.wasatch.init_spectrum_plot(self.spectrum_frame)
 
         self.help_button = ttk.Button(self.right_frame, text="Help", command=self.show_help)
         self.help_button.grid(row=5, column=1, padx=10, pady=5, sticky="ew")
@@ -410,13 +415,16 @@ class MyGUI:
         self.pause_button.config(state=tk.DISABLED)
         self.continue_button.config(state=tk.DISABLED)
 
-
-    def toggle_plot(self):
-        if self.toggle_plot_button["text"] == "Show plot":
-            self.toggle_plot_button.config(text="Hide plot")
-        else:
-            self.toggle_plot_button.config(text="Show plot")
-        self.wasatch.toggle_plot()
+    def show_help(self):
+        from tkinter import messagebox
+        msg = (
+            "Troubleshooting:\n"
+            "- Define positions with the SET buttons before running.\n"
+            "- Scroll the window if some widgets are hidden.\n"
+            "- Files are automatically numbered when existing.\n"
+            "- Ensure matplotlib is installed for plotting."
+        )
+        messagebox.showinfo("Help", msg)
 
 
     def show_help(self):
