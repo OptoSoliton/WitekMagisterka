@@ -39,7 +39,6 @@ class MyGUI:
         }
         self.dark_taken = False
 
-
         self.integration_time = 10
         self.scans_to_average = 1
         self.boxcar_half_width = 0
@@ -726,9 +725,15 @@ class MyGUI:
         self.stop_measurement()
 
         if not self.running:
-            required = ['1','2','4','5']
-            if any(self.user_positions.get(k) is None for k in required):
-                self.log('Set positions 1,2,4 and 5 first')
+            # determine which reference points are required
+            samples_z = int(self.wasatch_samples_countZ_entry.get())
+            required = ['1', '2', '4']
+            if samples_z > 1:
+                required.append('5')
+            missing = [k for k in required if self.user_positions.get(k) is None]
+            if missing:
+                self.log('Set positions ' + ','.join(missing) + ' first')
+
                 return
             if not self.serial.connected:
                 self.log('CNC not connected')
@@ -790,6 +795,9 @@ class MyGUI:
         )
         self.waitForCNC()
 
+        total_points = self.samples_count_x * self.samples_count_y * self.samples_count_z
+        self.log(f"Generating {total_points} scan points")
+
         self.wasatch.set_scan_bounds(
             self.user_positions['1']['X'], self.user_positions['2']['X'],
             self.user_positions['1']['Y'], self.user_positions['4']['Y'],
@@ -798,12 +806,16 @@ class MyGUI:
             self.user_positions,
             self.samples_count_x,
             self.samples_count_y,
-            self.samples_count_z
-
+            self.samples_count_z,
+            progress_cb=self.update_progress,
+            log_cb=self.log,
         )
+        self.log("Points ready")
+        self.update_progress(0)
 
         current_measure = 0
-        measure_count = self.samples_count_x * self.samples_count_y * self.samples_count_z
+        measure_count = total_points
+
 
         self.wasatch.init_file()
 
