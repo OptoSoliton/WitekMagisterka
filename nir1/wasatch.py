@@ -9,7 +9,7 @@ import logging
 import datetime
 import argparse
 import tkinter as tk
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 import wasatch
 from wasatch import utils
@@ -38,6 +38,7 @@ class Wasatch:
 
         # Figure for spectrum plot (embedded by GUI)
         self.fig = Figure(figsize=(2.5, 2.5), dpi=100)
+
         self.ax = self.fig.add_subplot(111)
         self.canvas = None
 
@@ -52,12 +53,27 @@ class Wasatch:
         self.position = (None, None, None)
         self.bounds = None
 
+        # Figure for measured and predicted points (embedded by GUI)
+        self.points_fig = Figure(figsize=(4, 4), dpi=100)
+        self.points_ax = self.points_fig.add_subplot(111, projection='3d')
+        self.points_canvas = None
+        self.points_toolbar = None
+
+
+        self.points = []
+        self.scan_points = None
+        self.predicted_points = None
+
+        self.position = (None, None, None)
+        self.bounds = None
+
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
 
     def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None,
                         count_x=1, count_y=1, count_z=1,
                         progress_cb=None, log_cb=None):
+
         self.bounds = (x1, x2, y1, y2, z1, z2)
         self.scan_points = points
         self.predicted_points = []
@@ -69,6 +85,7 @@ class Wasatch:
             counter = 0
             if progress_cb:
                 progress_cb(0)
+
             for k in range(count_z):
                 z = z1 + k * step_z
                 for i in range(count_x):
@@ -87,6 +104,7 @@ class Wasatch:
                 log_cb("Finished generating points")
         except Exception:
             pass
+
         self.update_points_plot()
 
     def parse_args(self, argv):
@@ -163,6 +181,7 @@ class Wasatch:
 
     def run(self, type):
         self.type = type
+        self.position = (None, None, None)
         if self.device is None:
             print("Not connected to spectrometer")
             return False
@@ -311,6 +330,7 @@ class Wasatch:
                 self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
 
             print('Filepath set to: %s', self.args.outfile)
+
         except Exception as e:
             print("Error initializing %s: %s", self.args.outfile, str(e))
             self.outfile = None
@@ -368,6 +388,7 @@ class Wasatch:
     def update_points_plot(self):
         if not self.points_canvas:
             return
+
         self.points_ax.clear()
         if self.bounds:
             import itertools
@@ -393,6 +414,7 @@ class Wasatch:
             self.points_ax.set_zlim(min(zs), max(zs))
             self.points_ax.invert_zaxis()
 
+
         if self.scan_points:
             colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
             for idx, key in enumerate(['1','2','3','4','5']):
@@ -410,6 +432,7 @@ class Wasatch:
 
         if None not in self.position:
             self.points_ax.scatter([self.position[0]], [self.position[1]], [self.position[2]], c='red', s=80, alpha=0.6)
+
 
         self.points_ax.set_xlabel('X')
         self.points_ax.set_ylabel('Y')
@@ -432,6 +455,15 @@ class Wasatch:
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
         self.canvas.mpl_connect('scroll_event', lambda e: None)
+
+
+    def toggle_points_window(self):
+        if self.points_window.winfo_ismapped():
+            self.points_window.withdraw()
+        else:
+            self.update_points_plot()
+
+            self.points_window.deiconify()
 
 def signal_handler(signal, frame):
     print('\rInterrupted by Ctrl-C...shutting down', end=' ')
