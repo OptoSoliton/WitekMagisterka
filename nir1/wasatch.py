@@ -9,7 +9,7 @@ import logging
 import datetime
 import argparse
 import tkinter as tk
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 import wasatch
 from wasatch import utils
@@ -47,17 +47,12 @@ class Wasatch:
         self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
         self.graph_window.withdraw()
 
-        # Window for measured points
-        self.points_window = tk.Toplevel(self.root)
-        self.points_window.title("Measured points")
-        self.points_window.protocol("WM_DELETE_WINDOW", self.points_window.withdraw)
-
+        # Figure for measured and predicted points (embedded by GUI)
         self.points_fig = Figure(figsize=(4, 4), dpi=100)
         self.points_ax = self.points_fig.add_subplot(111, projection='3d')
-        self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=self.points_window)
-        self.points_canvas.draw()
-        self.points_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=1)
-        self.points_window.withdraw()
+        self.points_canvas = None
+        self.points_toolbar = None
+
 
         self.points = []
         self.scan_points = None
@@ -69,7 +64,9 @@ class Wasatch:
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
 
-    def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None, count_x=1, count_y=1, count_z=1):
+    def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None,
+                        count_x=1, count_y=1, count_z=1,
+                        progress_cb=None, log_cb=None):
 
         self.bounds = (x1, x2, y1, y2, z1, z2)
         self.scan_points = points
@@ -78,6 +75,10 @@ class Wasatch:
             step_x = (x2 - x1) / (count_x - 1) if count_x > 1 else 0
             step_y = (y2 - y1) / (count_y - 1) if count_y > 1 else 0
             step_z = (z2 - z1) / (count_z - 1) if count_z > 1 else 0
+            total = max(count_x * count_y * count_z, 1)
+            counter = 0
+            if progress_cb:
+                progress_cb(0)
 
             for k in range(count_z):
                 z = z1 + k * step_z
@@ -86,6 +87,15 @@ class Wasatch:
                     for j in range(count_y):
                         y = y1 + j * step_y
                         self.predicted_points.append((x, y, z))
+                        counter += 1
+                        if progress_cb and counter % max(total // 100, 1) == 0:
+                            progress_cb(int(counter * 100 / total))
+                        if log_cb and counter % max(total // 10, 1) == 0:
+                            log_cb(f"Generated {counter}/{total} points")
+            if progress_cb:
+                progress_cb(100)
+            if log_cb:
+                log_cb("Finished generating points")
         except Exception:
             pass
 
@@ -370,6 +380,9 @@ class Wasatch:
                 self.outfile = None
 
     def update_points_plot(self):
+        if not self.points_canvas:
+            return
+
         self.points_ax.clear()
         if self.bounds:
             import itertools
@@ -393,8 +406,7 @@ class Wasatch:
             self.points_ax.set_xlim(min(xs), max(xs))
             self.points_ax.set_ylim(min(ys), max(ys))
             self.points_ax.set_zlim(min(zs), max(zs))
-            if self.points_ax.get_zlim()[0] > self.points_ax.get_zlim()[1]:
-                self.points_ax.invert_zaxis()
+            self.points_ax.invert_zaxis()
 
 
         if self.scan_points:
@@ -410,7 +422,11 @@ class Wasatch:
 
         if self.points:
             xs, ys, zs = zip(*self.points)
-            self.points_ax.scatter(xs, ys, zs, c='red', marker='o')
+            self.points_ax.scatter(xs, ys, zs, c='red', marker='o', s=20)
+
+        if None not in self.position:
+            self.points_ax.scatter([self.position[0]], [self.position[1]], [self.position[2]], c='red', s=80, alpha=0.6)
+
 
         self.points_ax.set_xlabel('X')
         self.points_ax.set_ylabel('Y')
@@ -418,8 +434,15 @@ class Wasatch:
         if self.scan_points:
             self.points_ax.legend(loc='best')
 
-
         self.points_canvas.draw()
+
+    def init_points_plot(self, frame):
+        self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=frame)
+        self.points_canvas.draw()
+        self.points_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=1)
+        self.points_toolbar = NavigationToolbar2Tk(self.points_canvas, frame)
+        self.points_toolbar.update()
+
 
     def toggle_plot(self):
         if self.graph_window.winfo_ismapped():
