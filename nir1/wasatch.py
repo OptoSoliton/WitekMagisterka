@@ -36,18 +36,58 @@ class Wasatch:
         print("Wasatch.PY version %s", wasatch.__version__)
         self.root = root
 
-        # Create tkinter window for plot
-        self.graph_window = tk.Toplevel(self.root)
-        self.graph_window.title("Measurement plot")
-        self.fig = Figure(figsize=(5, 4), dpi=100)
+        # Figure for spectrum plot (embedded by GUI)
+        self.fig = Figure(figsize=(2.5, 2.5), dpi=100)
         self.ax = self.fig.add_subplot(111)
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.graph_window)
-        self.canvas.draw()
-        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        self.graph_window.withdraw()
+        self.canvas = None
+
+        # Figure for measured and predicted points (embedded by GUI)
+        self.points_fig = Figure(figsize=(2.5, 2.5), dpi=100)
+        self.points_ax = self.points_fig.add_subplot(111, projection='3d')
+        self.points_canvas = None
+
+        self.points = []
+        self.scan_points = None
+        self.predicted_points = None
+        self.position = (None, None, None)
+        self.bounds = None
 
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
+
+    def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None,
+                        count_x=1, count_y=1, count_z=1,
+                        progress_cb=None, log_cb=None):
+        self.bounds = (x1, x2, y1, y2, z1, z2)
+        self.scan_points = points
+        self.predicted_points = []
+        try:
+            step_x = (x2 - x1) / (count_x - 1) if count_x > 1 else 0
+            step_y = (y2 - y1) / (count_y - 1) if count_y > 1 else 0
+            step_z = (z2 - z1) / (count_z - 1) if count_z > 1 else 0
+            total = max(count_x * count_y * count_z, 1)
+            counter = 0
+            if progress_cb:
+                progress_cb(0)
+            for k in range(count_z):
+                z = z1 + k * step_z
+                for i in range(count_x):
+                    x = x1 + i * step_x
+                    for j in range(count_y):
+                        y = y1 + j * step_y
+                        self.predicted_points.append((x, y, z))
+                        counter += 1
+                        if progress_cb and counter % max(total // 100, 1) == 0:
+                            progress_cb(int(counter * 100 / total))
+                        if log_cb and counter % max(total // 10, 1) == 0:
+                            log_cb(f"Generated {counter}/{total} points")
+            if progress_cb:
+                progress_cb(100)
+            if log_cb:
+                log_cb("Finished generating points")
+        except Exception:
+            pass
+        self.update_points_plot()
 
     def parse_args(self, argv):
         parser = argparse.ArgumentParser(description="Simple demo to acquire spectra from command-line interface")
@@ -148,6 +188,10 @@ class Wasatch:
                 pass
         return True
 
+    def run_with_position(self, label, x, y, z):
+        self.position = (x, y, z)
+        return self.run(label)
+
     def attempt_reading(self):
         try:
             reading_response = self.acquire_reading()
@@ -215,10 +259,18 @@ class Wasatch:
         # print(spectrum)
 
         if self.outfile:
-            self.outfile.write("%s;%s;%.2f;%s\n" % (self.type,
-                                                datetime.datetime.now(),
-                                                 reading.detector_temperature_degC,
-                                                 ";".join(format(x, ".2f") for x in spectrum)))
+            x, y, z = self.position
+            self.outfile.write("%s;%s;%s;%s;%.2f;%s\n" % (
+                self.type,
+                format(x, ".2f") if x is not None else "",
+                format(y, ".2f") if y is not None else "",
+                format(z, ".2f") if z is not None else "",
+                reading.detector_temperature_degC,
+                ";".join(format(x, ".2f") for x in spectrum)))
+
+        if None not in self.position:
+            self.points.append(self.position)
+            self.update_points_plot()
 
         self.draw_graph(spectrum)
         return
@@ -234,7 +286,13 @@ class Wasatch:
         self.canvas.draw()
 
     def set_output_file_path(self, outfile_path):
-        self.args.outfile = outfile_path
+        base, ext = os.path.splitext(outfile_path)
+        unique_path = outfile_path
+        counter = 1
+        while os.path.exists(unique_path):
+            unique_path = f"{base}_{counter}{ext}"
+            counter += 1
+        self.args.outfile = unique_path
 
         if self.outfile:
             try:
@@ -243,18 +301,18 @@ class Wasatch:
                 print("Error closing previous outfile: %s", str(e))
 
         try:
-            file_exists = os.path.isfile(outfile_path)
-            file_has_data = file_exists and os.path.getsize(outfile_path) > 0
+            file_exists = os.path.isfile(self.args.outfile)
+            file_has_data = file_exists and os.path.getsize(self.args.outfile) > 0
 
             if file_has_data:
-                self.outfile = open(outfile_path, "a")  
+                self.outfile = open(self.args.outfile, "a")
             else:
-                self.outfile = open(outfile_path, "w")  
-                self.outfile.write("type,time,temp,%s\n" % ",".join(format(x, ".2f") for x in self.device.settings.wavelengths))
-            
-            print('Filepath set to: %s', outfile_path)
+                self.outfile = open(self.args.outfile, "w")
+                self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
+
+            print('Filepath set to: %s', self.args.outfile)
         except Exception as e:
-            print("Error initializing %s: %s", outfile_path, str(e))
+            print("Error initializing %s: %s", self.args.outfile, str(e))
             self.outfile = None
 
 
@@ -287,8 +345,8 @@ class Wasatch:
                 if file_has_data:
                     self.outfile = open(self.args.outfile, "a")  
                 else:
-                    self.outfile = open(self.args.outfile, "w")  
-                    self.outfile.write("type;time;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
+                    self.outfile = open(self.args.outfile, "w")
+                    self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
 
             except Exception as e:
                 print(f"Error initializing {self.args.outfile}: {e}")
@@ -307,11 +365,73 @@ class Wasatch:
                 print("Error initializing %s", self.args.outfile)
                 self.outfile = None
 
-    def toggle_plot(self):
-        if self.graph_window.winfo_ismapped():
-            self.graph_window.withdraw()  # Hide plot
-        else:
-            self.graph_window.deiconify()  # Show plot
+    def update_points_plot(self):
+        if not self.points_canvas:
+            return
+        self.points_ax.clear()
+        if self.bounds:
+            import itertools
+            x1, x2, y1, y2, z1, z2 = self.bounds
+            xs = [x1, x2]
+            ys = [y1, y2]
+            zs = [z1, z2]
+            corners = list(itertools.product(xs, ys, zs))
+            edges = [
+                (0,1),(0,2),(2,3),(1,3),
+                (4,5),(4,6),(6,7),(5,7),
+                (0,4),(1,5),(2,6),(3,7)
+            ]
+            for e in edges:
+                self.points_ax.plot(
+                    [corners[e[0]][0], corners[e[1]][0]],
+                    [corners[e[0]][1], corners[e[1]][1]],
+                    [corners[e[0]][2], corners[e[1]][2]],
+                    color='black'
+                )
+            self.points_ax.set_xlim(min(xs), max(xs))
+            self.points_ax.set_ylim(min(ys), max(ys))
+            self.points_ax.set_zlim(min(zs), max(zs))
+            self.points_ax.invert_zaxis()
+
+        if self.scan_points:
+            colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
+            for idx, key in enumerate(['1','2','3','4','5']):
+                pt = self.scan_points.get(key)
+                if pt:
+                    self.points_ax.scatter([pt['X']], [pt['Y']], [pt['Z']], color=colors[idx], marker='^', label=f'Point {key}')
+
+        if self.predicted_points:
+            xs, ys, zs = zip(*self.predicted_points)
+            self.points_ax.scatter(xs, ys, zs, c='gray', alpha=0.3, s=10)
+
+        if self.points:
+            xs, ys, zs = zip(*self.points)
+            self.points_ax.scatter(xs, ys, zs, c='red', marker='o', s=20)
+
+        if None not in self.position:
+            self.points_ax.scatter([self.position[0]], [self.position[1]], [self.position[2]], c='red', s=80, alpha=0.6)
+
+        self.points_ax.set_xlabel('X')
+        self.points_ax.set_ylabel('Y')
+        self.points_ax.set_zlabel('Z')
+        if self.scan_points:
+            self.points_ax.legend(loc='best')
+
+        self.points_canvas.draw()
+
+    def init_points_plot(self, frame):
+        self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=frame)
+        self.points_canvas.draw()
+        self.points_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
+        self.points_canvas.mpl_connect('scroll_event', lambda e: None)
+
+    def init_spectrum_plot(self, frame):
+        if self.canvas:
+            return
+        self.canvas = FigureCanvasTkAgg(self.fig, master=frame)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
+        self.canvas.mpl_connect('scroll_event', lambda e: None)
 
 def signal_handler(signal, frame):
     print('\rInterrupted by Ctrl-C...shutting down', end=' ')
