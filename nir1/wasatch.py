@@ -62,16 +62,14 @@ class Wasatch:
         self.points = []
         self.scan_points = None
         self.predicted_points = None
-n
+
         self.position = (None, None, None)
         self.bounds = None
 
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
 
-    def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None,
-                        count_x=1, count_y=1, count_z=1,
-                        progress_cb=None, log_cb=None):
+    def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None, count_x=1, count_y=1, count_z=1):
 
         self.bounds = (x1, x2, y1, y2, z1, z2)
         self.scan_points = points
@@ -80,10 +78,6 @@ n
             step_x = (x2 - x1) / (count_x - 1) if count_x > 1 else 0
             step_y = (y2 - y1) / (count_y - 1) if count_y > 1 else 0
             step_z = (z2 - z1) / (count_z - 1) if count_z > 1 else 0
-            total = max(count_x * count_y * count_z, 1)
-            counter = 0
-            if progress_cb:
-                progress_cb(0)
 
             for k in range(count_z):
                 z = z1 + k * step_z
@@ -92,15 +86,6 @@ n
                     for j in range(count_y):
                         y = y1 + j * step_y
                         self.predicted_points.append((x, y, z))
-                        counter += 1
-                        if progress_cb and counter % max(total // 100, 1) == 0:
-                            progress_cb(int(counter * 100 / total))
-                        if log_cb and counter % max(total // 10, 1) == 0:
-                            log_cb(f"Generated {counter}/{total} points")
-            if progress_cb:
-                progress_cb(100)
-            if log_cb:
-                log_cb("Finished generating points")
         except Exception:
             pass
 
@@ -408,7 +393,8 @@ n
             self.points_ax.set_xlim(min(xs), max(xs))
             self.points_ax.set_ylim(min(ys), max(ys))
             self.points_ax.set_zlim(min(zs), max(zs))
-            self.points_ax.invert_zaxis()
+            if self.points_ax.get_zlim()[0] > self.points_ax.get_zlim()[1]:
+                self.points_ax.invert_zaxis()
 
 
         if self.scan_points:
