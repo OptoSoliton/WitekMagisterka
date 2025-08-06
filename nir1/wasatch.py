@@ -36,16 +36,22 @@ class Wasatch:
         print("Wasatch.PY version %s", wasatch.__version__)
         self.root = root
 
-        # Create tkinter window for plot
-        self.graph_window = tk.Toplevel(self.root)
-        self.graph_window.title("Measurement plot")
-        self.graph_window.protocol("WM_DELETE_WINDOW", self.graph_window.withdraw)
-        self.fig = Figure(figsize=(5, 4), dpi=100)
+        # Figure for spectrum plot (embedded by GUI)
+        self.fig = Figure(figsize=(2.5, 2.5), dpi=100)
+
         self.ax = self.fig.add_subplot(111)
-        self.canvas = FigureCanvasTkAgg(self.fig, master=self.graph_window)
-        self.canvas.draw()
-        self.canvas.get_tk_widget().pack(side=tk.TOP, fill=tk.BOTH, expand=1)
-        self.graph_window.withdraw()
+        self.canvas = None
+
+        # Figure for measured and predicted points (embedded by GUI)
+        self.points_fig = Figure(figsize=(2.5, 2.5), dpi=100)
+        self.points_ax = self.points_fig.add_subplot(111, projection='3d')
+        self.points_canvas = None
+
+        self.points = []
+        self.scan_points = None
+        self.predicted_points = None
+        self.position = (None, None, None)
+        self.bounds = None
 
         # Figure for measured and predicted points (embedded by GUI)
         self.points_fig = Figure(figsize=(4, 4), dpi=100)
@@ -439,16 +445,17 @@ class Wasatch:
     def init_points_plot(self, frame):
         self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=frame)
         self.points_canvas.draw()
-        self.points_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=1)
-        self.points_toolbar = NavigationToolbar2Tk(self.points_canvas, frame)
-        self.points_toolbar.update()
+        self.points_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
+        self.points_canvas.mpl_connect('scroll_event', lambda e: None)
 
+    def init_spectrum_plot(self, frame):
+        if self.canvas:
+            return
+        self.canvas = FigureCanvasTkAgg(self.fig, master=frame)
+        self.canvas.draw()
+        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
+        self.canvas.mpl_connect('scroll_event', lambda e: None)
 
-    def toggle_plot(self):
-        if self.graph_window.winfo_ismapped():
-            self.graph_window.withdraw()  # Hide plot
-        else:
-            self.graph_window.deiconify()  # Show plot
 
     def toggle_points_window(self):
         if self.points_window.winfo_ismapped():
