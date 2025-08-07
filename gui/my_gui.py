@@ -4,6 +4,7 @@ import time
 import threading
 import numpy as np
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure  # required for embedded plots
 
 
 class MyGUI:
@@ -414,18 +415,6 @@ class MyGUI:
                 child.config(state=tk.NORMAL)
         self.pause_button.config(state=tk.DISABLED)
         self.continue_button.config(state=tk.DISABLED)
-
-    def show_help(self):
-        from tkinter import messagebox
-        msg = (
-            "Troubleshooting:\n"
-            "- Define positions with the SET buttons before running.\n"
-            "- Scroll the window if some widgets are hidden.\n"
-            "- Files are automatically numbered when existing.\n"
-            "- Ensure matplotlib is installed for plotting."
-        )
-        messagebox.showinfo("Help", msg)
-
 
     def show_help(self):
         from tkinter import messagebox
