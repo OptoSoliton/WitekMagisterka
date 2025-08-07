@@ -1,16 +1,3 @@
-import os
-import re
-import sys
-import time
-import numpy
-import signal
-import psutil
-import logging
-import datetime
-import argparse
-import tkinter as tk
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
-from matplotlib.figure import Figure
 import wasatch
 from wasatch import utils
 from wasatch import applog
@@ -38,7 +25,6 @@ class Wasatch:
 
         # Figure for spectrum plot (embedded by GUI)
         self.fig = Figure(figsize=(2.5, 2.5), dpi=100)
-
         self.ax = self.fig.add_subplot(111)
         self.canvas = None
 
@@ -53,27 +39,12 @@ class Wasatch:
         self.position = (None, None, None)
         self.bounds = None
 
-        # Figure for measured and predicted points (embedded by GUI)
-        self.points_fig = Figure(figsize=(4, 4), dpi=100)
-        self.points_ax = self.points_fig.add_subplot(111, projection='3d')
-        self.points_canvas = None
-        self.points_toolbar = None
-
-
-        self.points = []
-        self.scan_points = None
-        self.predicted_points = None
-
-        self.position = (None, None, None)
-        self.bounds = None
-
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
 
     def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None,
                         count_x=1, count_y=1, count_z=1,
                         progress_cb=None, log_cb=None):
-
         self.bounds = (x1, x2, y1, y2, z1, z2)
         self.scan_points = points
         self.predicted_points = []
@@ -85,7 +56,6 @@ class Wasatch:
             counter = 0
             if progress_cb:
                 progress_cb(0)
-
             for k in range(count_z):
                 z = z1 + k * step_z
                 for i in range(count_x):
@@ -104,7 +74,6 @@ class Wasatch:
                 log_cb("Finished generating points")
         except Exception:
             pass
-
         self.update_points_plot()
 
     def parse_args(self, argv):
@@ -132,56 +101,7 @@ class Wasatch:
             print("Invalid log level: %s (defaulting to INFO)" % args.log_level)
             args.log_level = "INFO"
 
-        return args
-
-
-    def connect(self):
-        """ If the current device is disconnected, and there is a new device,
-            attempt to connect to it. """
-
-        if self.device is not None:
-            return
-
-        if self.bus is None:
-            print("instantiating WasatchBus")
-            self.bus = WasatchBus(use_sim = False)
-
-        if not self.bus.device_ids:
-            print("No Wasatch USB spectrometers found.")
-            return
-
-        device_id = self.bus.device_ids[0]
-        print("connect: trying to connect to %s", device_id)
-        device_id.device_type = RealUSBDevice(device_id)
-
-        if self.args.non_blocking:
-            print("instantiating WasatchDeviceWrapper (non-blocking)")
-            device = WasatchDeviceWrapper(
-                device_id = device_id,
-                log_queue = self.logger.log_queue,
-                log_level = self.args.log_level)
-        else:
-            print("instantiating WasatchDevice (blocking)")
-            if device_id.vid == 0x24aa:
-                device = WasatchDevice(device_id)
-            else:
-                device = OceanDevice(device_id)
-
-        ok = device.connect()
-        if not ok:
-            print("connect: can't connect to %s", device_id)
-            return
-
-        print("connect: device connected")
-
-        self.device = device
-        self.reading_count = 0
-
-        return device
-
-    def run(self, type):
-        self.type = type
-        self.position = (None, None, None)
+@@ -126,50 +166,54 @@ class Wasatch:
         if self.device is None:
             print("Not connected to spectrometer")
             return False
@@ -236,23 +156,7 @@ class Wasatch:
             reading = self.device.acquire_data()
             if reading is None:
                 print("waiting on next reading")
-            else:
-                return reading
-
-    def process_reading(self, reading):
-        if self.args.scans_to_average > 1 and not reading.averaged:
-            return
-
-        self.reading_count += 1
-
-        if self.args.boxcar_half_width > 0:
-            spectrum = utils.apply_boxcar(reading.spectrum, self.args.boxcar_half_width)
-        else:
-            spectrum = reading.spectrum
-
-        if self.args.ascii_art:
-            print("\n".join(wasatch.utils.ascii_spectrum(spectrum, rows=20, cols=80, x_axis=self.device.settings.wavelengths, x_unit="nm")))
-        else:
+@@ -193,147 +237,221 @@ class Wasatch:
             spectrum_min = numpy.amin(spectrum)
             spectrum_max = numpy.amax(spectrum)
             spectrum_avg = numpy.mean(spectrum)
@@ -330,7 +234,6 @@ class Wasatch:
                 self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
 
             print('Filepath set to: %s', self.args.outfile)
-
         except Exception as e:
             print("Error initializing %s: %s", self.args.outfile, str(e))
             self.outfile = None
@@ -388,7 +291,6 @@ class Wasatch:
     def update_points_plot(self):
         if not self.points_canvas:
             return
-
         self.points_ax.clear()
         if self.bounds:
             import itertools
@@ -414,7 +316,6 @@ class Wasatch:
             self.points_ax.set_zlim(min(zs), max(zs))
             self.points_ax.invert_zaxis()
 
-
         if self.scan_points:
             colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
             for idx, key in enumerate(['1','2','3','4','5']):
@@ -433,7 +334,6 @@ class Wasatch:
         if None not in self.position:
             self.points_ax.scatter([self.position[0]], [self.position[1]], [self.position[2]], c='red', s=80, alpha=0.6)
 
-
         self.points_ax.set_xlabel('X')
         self.points_ax.set_ylabel('Y')
         self.points_ax.set_zlabel('Z')
@@ -446,7 +346,6 @@ class Wasatch:
         self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=frame)
         self.points_canvas.draw()
         self.points_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
-        self.points_canvas.mpl_connect('scroll_event', lambda e: None)
 
     def init_spectrum_plot(self, frame):
         if self.canvas:
@@ -454,16 +353,6 @@ class Wasatch:
         self.canvas = FigureCanvasTkAgg(self.fig, master=frame)
         self.canvas.draw()
         self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
-        self.canvas.mpl_connect('scroll_event', lambda e: None)
-
-
-    def toggle_points_window(self):
-        if self.points_window.winfo_ismapped():
-            self.points_window.withdraw()
-        else:
-            self.update_points_plot()
-
-            self.points_window.deiconify()
 
 def signal_handler(signal, frame):
     print('\rInterrupted by Ctrl-C...shutting down', end=' ')
@@ -489,12 +378,3 @@ def clean_shutdown():
     sys.exit()
 
 demo = None
-if __name__ == "__main__":
-    signal.signal(signal.SIGINT, signal_handler)
-
-    demo = Wasatch(sys.argv)
-    if demo.connect():
-        print("Press Control-Break to interrupt...")
-        demo.run()
-
-    clean_shutdown()
