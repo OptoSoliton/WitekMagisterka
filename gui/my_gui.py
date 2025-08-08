@@ -237,8 +237,22 @@ class MyGUI:
         self.set_scans_to_average_button = ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_scans_to_average)
         self.set_scans_to_average_button.grid(row=3, column=2, padx=10, pady=5)
 
-        # Boxcar half width control
-@@ -210,316 +261,673 @@ class MyGUI:
+        # Boxcar half width
+        self.boxcar_half_width_label = ttk.Label(self.wasatch_parameters_frame, text="Boxcar half width:")
+        self.boxcar_half_width_label.grid(row=4, column=0, padx=10, pady=5)
+        self.boxcar_half_width_entry = ttk.Entry(self.wasatch_parameters_frame)
+        self.boxcar_half_width_entry.grid(row=4, column=1, padx=10, pady=5)
+        self.boxcar_half_width_entry.insert(tk.END, str(self.boxcar_half_width))
+        ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_boxcar_half_width).grid(row=4, column=2, padx=10, pady=5)
+
+        # Delay ms
+        self.delay_ms_label = ttk.Label(self.wasatch_parameters_frame, text="Delay (ms):")
+        self.delay_ms_label.grid(row=5, column=0, padx=10, pady=5)
+        self.delay_ms_entry = ttk.Entry(self.wasatch_parameters_frame)
+        self.delay_ms_entry.grid(row=5, column=1, padx=10, pady=5)
+        self.delay_ms_entry.insert(tk.END, str(self.delay_ms))
+        ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_delay_ms).grid(row=5, column=2, padx=10, pady=5)
+
         self.max_spectra_label = ttk.Label(self.wasatch_parameters_frame, text="Max Spectra:")
         self.max_spectra_label.grid(row=6, column=0, padx=10, pady=5)
         self.max_spectra_entry = ttk.Entry(self.wasatch_parameters_frame)
@@ -403,9 +417,10 @@ class MyGUI:
         messagebox.showinfo("Help", msg)
 
     def update_progress(self, progress):
-        self.progress_bar["value"] = progress
-        self.progress_label['text'] = str(progress) + ' %'
-        self.root.update_idletasks()
+        def _do():
+            self.progress_bar["value"] = progress
+            self.progress_label['text'] = f"{progress} %"
+        self.root.after(0, _do)
 
     def set_integration_time(self):
         integration_time = int(self.integration_time_entry.get())
@@ -491,25 +506,27 @@ class MyGUI:
         self.log(log_message)
 
     def log(self, message):
-        self.log_text.insert(tk.END, message + "\n")
-        self.log_text.see(tk.END)
+        def _do():
+            self.log_text.insert(tk.END, message + "\n")
+            self.log_text.see(tk.END)
+        self.root.after(0, _do)
 
     def move(self, direction):
         step = float(self.get_step())
         speed = self.get_speed()
 
         if direction == '\u2191':  # Front (Y+)
-            self.current_position['Y'] -= step
-            command = f'G1 Y{step} F{speed}'
-        elif direction =='\u2193':  # Rear (Y-)
             self.current_position['Y'] += step
+            command = f'G1 Y{step} F{speed}'
+        elif direction == '\u2193':  # Rear (Y-)
+            self.current_position['Y'] -= step
             command = f'G1 Y-{step} F{speed}'
         elif direction == '\u2190':  # Left (X-)
             self.current_position['X'] -= step
-            command = f'G1 X{step} F{speed}'
+            command = f'G1 X-{step} F{speed}'
         elif direction == '\u2192':  # Right (X+)
             self.current_position['X'] += step
-            command = f'G1 X-{step} F{speed}'
+            command = f'G1 X{step} F{speed}'
         elif direction == 'Up':  # Up (Z+)
             self.current_position['Z'] += step
             command = f'G1 Z{step} F{speed}'
@@ -546,17 +563,19 @@ class MyGUI:
         if z is None:
             z = self.current_position['Z']
 
-        self.position_label.config(text=f"X:{x:.1f} Y:{y:.1f} Z:{z:.1f}")
+        def _do():
+            self.position_label.config(text=f"X:{x:.1f} Y:{y:.1f} Z:{z:.1f}")
 
-        # update head dot
-        if self.head_dot:
-            self.head_dot.remove()
-        self.head_dot = self.map_ax.scatter([x], [y], [z], c='red', s=80, alpha=0.6)
+            if self.head_dot:
+                self.head_dot.remove()
+            self.head_dot = self.map_ax.scatter([x], [y], [z], c='red', s=80, alpha=0.6)
 
-        self.wasatch.position = (x, y, z)
-        self.update_volume_display()
-        self.map_canvas.draw()
-        self.wasatch.update_points_plot()
+            self.wasatch.position = (x, y, z)
+            self.update_volume_display()
+            self.map_canvas.draw()
+            self.wasatch.update_points_plot()
+
+        self.root.after(0, _do)
 
     def update_volume_display(self):
         import itertools
