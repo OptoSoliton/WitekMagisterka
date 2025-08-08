@@ -114,6 +114,48 @@ class Wasatch:
 
         return args
 
+    def connect(self):
+        """Connect to the first available Wasatch spectrometer."""
+        if self.device is not None:
+            return self.device
+
+        if self.bus is None:
+            log.debug("instantiating WasatchBus")
+            self.bus = WasatchBus(use_sim=False)
+
+        if not self.bus.device_ids:
+            print("No Wasatch USB spectrometers found.")
+            return None
+
+        device_id = self.bus.device_ids[0]
+        log.debug("connect: trying to connect to %s", device_id)
+        device_id.device_type = RealUSBDevice(device_id)
+
+        if self.args.non_blocking:
+            log.debug("instantiating WasatchDeviceWrapper (non-blocking)")
+            device = WasatchDeviceWrapper(
+                device_id=device_id,
+                log_queue=self.logger.log_queue,
+                log_level=self.args.log_level,
+            )
+        else:
+            log.debug("instantiating WasatchDevice (blocking)")
+            if device_id.vid == 0x24aa:
+                device = WasatchDevice(device_id)
+            else:
+                device = OceanDevice(device_id)
+
+        ok = device.connect()
+        if not ok:
+            log.critical("connect: can't connect to %s", device_id)
+            return None
+
+        self.device = device
+        self.reading_count = 0
+        self.init_file()
+        return device
+
+
     def run(self, label):
         if self.device is None:
             print("Not connected to spectrometer")
