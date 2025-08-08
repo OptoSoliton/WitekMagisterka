@@ -155,6 +155,7 @@ class Wasatch:
         self.init_file()
         return device
 
+
     def run(self, label):
         if self.device is None:
             print("Not connected to spectrometer")
