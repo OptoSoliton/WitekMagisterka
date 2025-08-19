@@ -2,15 +2,10 @@ import os
 import re
 import sys
 import time
-import numpy
-import signal
-import psutil
-import logging
 import datetime
 import argparse
-import tkinter as tk
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
-from matplotlib.figure import Figure
+import numpy
+import psutil
 import wasatch
 from wasatch import utils
 from wasatch import applog
@@ -19,6 +14,8 @@ from wasatch.OceanDevice          import OceanDevice
 from wasatch.WasatchDevice        import WasatchDevice
 from wasatch.WasatchDeviceWrapper import WasatchDeviceWrapper
 from wasatch.RealUSBDevice        import RealUSBDevice
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 import logging
 
 log = logging.getLogger(__name__)
@@ -33,7 +30,7 @@ class Wasatch:
         self.light_spectrum = None
         self.args = self.parse_args(argv)
         self.logger = applog.MainLogger(self.args.log_level)
-        print("Wasatch.PY version %s", wasatch.__version__)
+        print(f"Wasatch.PY version {wasatch.__version__}")
         self.root = root
 
         # Figure for spectrum plot (embedded by GUI)
@@ -51,6 +48,7 @@ class Wasatch:
         self.predicted_points = None
         self.position = (None, None, None)
         self.bounds = None
+
 
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
@@ -90,6 +88,8 @@ class Wasatch:
         self.update_points_plot()
 
     def parse_args(self, argv):
+        if argv is None:
+            argv = sys.argv
         parser = argparse.ArgumentParser(description="Simple demo to acquire spectra from command-line interface")
         parser.add_argument("--log-level",           type=str, default="INFO", help="logging level [DEBUG,INFO,WARNING,ERROR,CRITICAL]")
         parser.add_argument("--integration-time-ms", type=int, default=10,     help="integration time (ms, default 10)")
@@ -102,48 +102,44 @@ class Wasatch:
         parser.add_argument("--ascii-art",           action="store_true",      help="graph spectra in ASCII")
         parser.add_argument("--version",             action="store_true",      help="display Wasatch.PY version and exit")
 
-        # parse argv into dict
         args = parser.parse_args(argv[1:])
         if args.version:
-            print("Wasatch.PY %s" % wasatch.__version__)
+            print(f"Wasatch.PY {wasatch.__version__}")
             sys.exit(0)
 
-        # normalize log level
         args.log_level = args.log_level.upper()
         if not re.match("^(DEBUG|INFO|ERROR|WARNING|CRITICAL)$", args.log_level):
-            print("Invalid log level: %s (defaulting to INFO)" % args.log_level)
+            print(f"Invalid log level: {args.log_level} (defaulting to INFO)")
             args.log_level = "INFO"
 
         return args
 
-
     def connect(self):
-        """ If the current device is disconnected, and there is a new device,
-            attempt to connect to it. """
-
+        """Connect to the first available Wasatch spectrometer."""
         if self.device is not None:
-            return
+            return self.device
 
         if self.bus is None:
-            print("instantiating WasatchBus")
-            self.bus = WasatchBus(use_sim = False)
+            log.debug("instantiating WasatchBus")
+            self.bus = WasatchBus(use_sim=False)
 
         if not self.bus.device_ids:
             print("No Wasatch USB spectrometers found.")
-            return
+            return None
 
         device_id = self.bus.device_ids[0]
-        print("connect: trying to connect to %s", device_id)
+        log.debug("connect: trying to connect to %s", device_id)
         device_id.device_type = RealUSBDevice(device_id)
 
         if self.args.non_blocking:
-            print("instantiating WasatchDeviceWrapper (non-blocking)")
+            log.debug("instantiating WasatchDeviceWrapper (non-blocking)")
             device = WasatchDeviceWrapper(
-                device_id = device_id,
-                log_queue = self.logger.log_queue,
-                log_level = self.args.log_level)
+                device_id=device_id,
+                log_queue=self.logger.log_queue,
+                log_level=self.args.log_level,
+            )
         else:
-            print("instantiating WasatchDevice (blocking)")
+            log.debug("instantiating WasatchDevice (blocking)")
             if device_id.vid == 0x24aa:
                 device = WasatchDevice(device_id)
             else:
@@ -151,23 +147,21 @@ class Wasatch:
 
         ok = device.connect()
         if not ok:
-            print("connect: can't connect to %s", device_id)
-            return
-
-        print("connect: device connected")
+            log.critical("connect: can't connect to %s", device_id)
+            return None
 
         self.device = device
         self.reading_count = 0
-
+        self.init_file()
         return device
 
-    def run(self, type):
-        self.type = type
+
+    def run(self, label):
         if self.device is None:
             print("Not connected to spectrometer")
             return False
 
-        # apply initial settings
+        self.type = label
         self.device.change_setting("integration_time_ms", self.args.integration_time_ms)
         self.device.change_setting("scans_to_average", self.args.scans_to_average)
         self.device.change_setting("detector_tec_enable", True)
@@ -176,15 +170,13 @@ class Wasatch:
         self.attempt_reading()
         end_time = datetime.datetime.now()
 
-      
-        # compute how much longer we should wait before the next reading
         reading_time_ms = int((end_time - start_time).microseconds / 1000)
         sleep_ms = self.args.delay_ms - reading_time_ms
         if sleep_ms > 0:
-            print("sleeping %d ms (%d ms already passed)", sleep_ms, reading_time_ms)
+            print(f"sleeping {sleep_ms} ms ({reading_time_ms} ms already passed)")
             try:
                 time.sleep(float(sleep_ms) / 1000)
-            except:
+            except Exception:
                 pass
         return True
 
@@ -215,46 +207,40 @@ class Wasatch:
     def acquire_reading(self):
         while True:
             reading = self.device.acquire_data()
-            if reading is None:
-                print("waiting on next reading")
-            else:
+            if reading is not None:
                 return reading
+            print("waiting on next reading")
+            time.sleep(0.05)
 
     def process_reading(self, reading):
-        if self.args.scans_to_average > 1 and not reading.averaged:
-            return
-
+        spectrum = reading.spectrum
         self.reading_count += 1
 
-        if self.args.boxcar_half_width > 0:
-            spectrum = utils.apply_boxcar(reading.spectrum, self.args.boxcar_half_width)
-        else:
-            spectrum = reading.spectrum
+        spectrum_min = numpy.amin(spectrum)
+        spectrum_max = numpy.amax(spectrum)
+        spectrum_avg = numpy.mean(spectrum)
+        spectrum_std = numpy.std(spectrum)
+        size_in_bytes = psutil.Process(os.getpid()).memory_info().rss
 
-        if self.args.ascii_art:
-            print("\n".join(wasatch.utils.ascii_spectrum(spectrum, rows=20, cols=80, x_axis=self.device.settings.wavelengths, x_unit="nm")))
-        else:
-            spectrum_min = numpy.amin(spectrum)
-            spectrum_max = numpy.amax(spectrum)
-            spectrum_avg = numpy.mean(spectrum)
-            spectrum_std = numpy.std (spectrum)
-            size_in_bytes = psutil.Process(os.getpid()).memory_info().rss
+        print("Reading: %10d  Detector: %5.2f degC  Min: %8.2f  Max: %8.2f  Avg: %8.2f  StdDev: %8.2f  Memory: %11d" % (
+            self.reading_count,
+            reading.detector_temperature_degC,
+            spectrum_min,
+            spectrum_max,
+            spectrum_avg,
+            spectrum_std,
+            size_in_bytes))
+        print("%s" % str(reading))
 
-            print("Reading: %10d  Detector: %5.2f degC  Min: %8.2f  Max: %8.2f  Avg: %8.2f  StdDev: %8.2f  Memory: %11d" % (
-                self.reading_count,
+        if self.outfile:
+            x, y, z = self.position
+            self.outfile.write("%s;%s;%s;%s;%.2f;%s\n" % (
+                self.type,
+                format(x, ".2f") if x is not None else "",
+                format(y, ".2f") if y is not None else "",
+                format(z, ".2f") if z is not None else "",
                 reading.detector_temperature_degC,
-                spectrum_min,
-                spectrum_max,
-                spectrum_avg,
-                spectrum_std,
-                size_in_bytes))
-            print("%s", str(reading))
-
-        # if self.type == "light":
-        #     self.light_spectrum = spectrum
-        # elif self.type != "dark" and self.light_spectrum is not None:
-        #     # spectrum -= self.light_spectrum
-        #     spectrum = numpy.subtract( spectrum,self.light_spectrum)
+                ";".join(format(x, ".2f") for x in spectrum)))
 
         # print(spectrum)
 
@@ -267,6 +253,7 @@ class Wasatch:
                 format(z, ".2f") if z is not None else "",
                 reading.detector_temperature_degC,
                 ";".join(format(x, ".2f") for x in spectrum)))
+
 
         if None not in self.position:
             self.points.append(self.position)
@@ -316,25 +303,26 @@ class Wasatch:
             self.outfile = None
 
 
+
     def set_integration_time(self, integration_time_ms):
         self.args.integration_time_ms = integration_time_ms
-        print('Inetration time set to %i ms', integration_time_ms)
+        print(f'Inetration time set to {integration_time_ms} ms')
 
     def set_scans_to_average(self, scans_to_average):
         self.args.scans_to_average = scans_to_average
-        print('Scans to average set to %i', scans_to_average)
+        print(f'Scans to average set to {scans_to_average}')
 
     def set_boxcar_half_width(self, boxcar_half_width):
         self.args.boxcar_half_width = boxcar_half_width
-        print('Boxcar half width set to %i', boxcar_half_width)
+        print(f'Boxcar half width set to {boxcar_half_width}')
 
     def set_delay_ms(self, delay_ms):
         self.args.delay_ms = delay_ms
-        print('Delay set to %i ms', delay_ms)
+        print(f'Delay set to {delay_ms} ms')
 
     def set_max_spectra(self, max_spectra):
         self.args.max = max_spectra
-        print('Max spectra set to %i', max_spectra)
+        print(f'Max spectra set to {max_spectra}')
 
     def init_file(self):
         if self.args.outfile:
@@ -351,6 +339,7 @@ class Wasatch:
             except Exception as e:
                 print(f"Error initializing {self.args.outfile}: {e}")
                 self.outfile = None
+
 
     def close_file(self):
         if self.args.outfile:
@@ -455,12 +444,3 @@ def clean_shutdown():
     sys.exit()
 
 demo = None
-if __name__ == "__main__":
-    signal.signal(signal.SIGINT, signal_handler)
-
-    demo = Wasatch(sys.argv)
-    if demo.connect():
-        print("Press Control-Break to interrupt...")
-        demo.run()
-
-    clean_shutdown()
