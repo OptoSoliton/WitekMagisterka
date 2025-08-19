@@ -1,3 +1,11 @@
+import os
+import re
+import sys
+import time
+import datetime
+import argparse
+import numpy
+import psutil
 import wasatch
 from wasatch import utils
 from wasatch import applog
@@ -6,6 +14,8 @@ from wasatch.OceanDevice          import OceanDevice
 from wasatch.WasatchDevice        import WasatchDevice
 from wasatch.WasatchDeviceWrapper import WasatchDeviceWrapper
 from wasatch.RealUSBDevice        import RealUSBDevice
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.figure import Figure
 import logging
 
 log = logging.getLogger(__name__)
@@ -20,7 +30,7 @@ class Wasatch:
         self.light_spectrum = None
         self.args = self.parse_args(argv)
         self.logger = applog.MainLogger(self.args.log_level)
-        print("Wasatch.PY version %s", wasatch.__version__)
+        log.info(f"Wasatch.PY version {wasatch.__version__}")
         self.root = root
 
         # Figure for spectrum plot (embedded by GUI)
@@ -38,9 +48,30 @@ class Wasatch:
         self.predicted_points = None
         self.position = (None, None, None)
         self.bounds = None
+        self.reading_count = 0
+        self.points_zoomed = False
 
     def set_logger_handler(self, logger_handler):
-        self.logger.addHandler(logger_handler)
+        """Attach an additional handler to the Wasatch logger.
+
+        The underlying `applog.MainLogger` used by Wasatch.PY exposes its
+        root logger via the ``root`` attribute rather than implementing the
+        standard ``addHandler`` method.  Using ``root`` ensures compatibility
+        while still allowing external handlers (like the GUI log window) to
+        receive messages.  Fall back to the global logger if the expected
+        attribute is missing.
+        """
+
+        try:
+            # ``MainLogger`` provides access to the real ``logging.Logger`` via
+            # the ``root`` attribute.
+            self.logger.root.addHandler(logger_handler)
+        except AttributeError:
+            logging.getLogger().addHandler(logger_handler)
+
+        # Also attach to this module's logger so direct ``log`` calls propagate
+        # to the same handler.
+        log.addHandler(logger_handler)
 
     def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None,
                         count_x=1, count_y=1, count_z=1,
@@ -48,12 +79,20 @@ class Wasatch:
         self.bounds = (x1, x2, y1, y2, z1, z2)
         self.scan_points = points
         self.predicted_points = []
+        self.points_zoomed = False
         try:
             step_x = (x2 - x1) / (count_x - 1) if count_x > 1 else 0
             step_y = (y2 - y1) / (count_y - 1) if count_y > 1 else 0
             step_z = (z2 - z1) / (count_z - 1) if count_z > 1 else 0
             total = max(count_x * count_y * count_z, 1)
             counter = 0
+            if log_cb:
+                log_cb(
+                    f"Bounds: x1={x1}, x2={x2}, y1={y1}, y2={y2}, z1={z1}, z2={z2}"
+                )
+                log_cb(
+                    f"Step sizes: step_x={step_x}, step_y={step_y}, step_z={step_z}"
+                )
             if progress_cb:
                 progress_cb(0)
             for k in range(count_z):
@@ -64,10 +103,10 @@ class Wasatch:
                         y = y1 + j * step_y
                         self.predicted_points.append((x, y, z))
                         counter += 1
-                        if progress_cb and counter % max(total // 100, 1) == 0:
+                        if progress_cb:
                             progress_cb(int(counter * 100 / total))
-                        if log_cb and counter % max(total // 10, 1) == 0:
-                            log_cb(f"Generated {counter}/{total} points")
+                        if log_cb:
+                            log_cb(f"Generated {counter}/{total} points at x={x:.2f}, y={y:.2f}, z={z:.2f}")
             if progress_cb:
                 progress_cb(100)
             if log_cb:
@@ -77,6 +116,8 @@ class Wasatch:
         self.update_points_plot()
 
     def parse_args(self, argv):
+        if argv is None:
+            argv = sys.argv
         parser = argparse.ArgumentParser(description="Simple demo to acquire spectra from command-line interface")
         parser.add_argument("--log-level",           type=str, default="INFO", help="logging level [DEBUG,INFO,WARNING,ERROR,CRITICAL]")
         parser.add_argument("--integration-time-ms", type=int, default=10,     help="integration time (ms, default 10)")
@@ -89,24 +130,69 @@ class Wasatch:
         parser.add_argument("--ascii-art",           action="store_true",      help="graph spectra in ASCII")
         parser.add_argument("--version",             action="store_true",      help="display Wasatch.PY version and exit")
 
-        # parse argv into dict
         args = parser.parse_args(argv[1:])
         if args.version:
-            print("Wasatch.PY %s" % wasatch.__version__)
+            print(f"Wasatch.PY {wasatch.__version__}")
             sys.exit(0)
 
-        # normalize log level
         args.log_level = args.log_level.upper()
         if not re.match("^(DEBUG|INFO|ERROR|WARNING|CRITICAL)$", args.log_level):
-            print("Invalid log level: %s (defaulting to INFO)" % args.log_level)
+            print(f"Invalid log level: {args.log_level} (defaulting to INFO)")
             args.log_level = "INFO"
 
-@@ -126,50 +166,54 @@ class Wasatch:
+        return args
+
+    def connect(self):
+        """Connect to the first available Wasatch spectrometer."""
+        if self.device is not None:
+            return self.device
+
+        if self.bus is None:
+            log.debug("instantiating WasatchBus")
+            self.bus = WasatchBus(use_sim=False)
+
+        # refresh device list in case USB state changed
+        self.bus.update()
+        if not self.bus.device_ids:
+            log.info("No Wasatch USB spectrometers found.")
+            return None
+
+        device_id = self.bus.device_ids[0]
+        log.debug("connect: trying to connect to %s", device_id)
+        device_id.device_type = RealUSBDevice(device_id)
+
+        if self.args.non_blocking:
+            log.debug("instantiating WasatchDeviceWrapper (non-blocking)")
+            device = WasatchDeviceWrapper(
+                device_id=device_id,
+                log_queue=self.logger.log_queue,
+                log_level=self.args.log_level,
+            )
+        else:
+            log.debug("instantiating WasatchDevice (blocking)")
+            if device_id.vid == 0x24aa:
+                device = WasatchDevice(device_id)
+            else:
+                device = OceanDevice(device_id)
+
+        log.info("Connecting to %s", device_id)
+        ok = device.connect()
+        if not ok:
+            log.critical("connect: can't connect to %s", device_id)
+            return None
+
+        self.device = device
+        self.reading_count = 0
+        self.init_file()
+        log.info("Spectrometer connected")
+        return device
+
+    def run(self, label):
         if self.device is None:
-            print("Not connected to spectrometer")
+            log.info("Not connected to spectrometer")
             return False
 
-        # apply initial settings
+        self.type = label
         self.device.change_setting("integration_time_ms", self.args.integration_time_ms)
         self.device.change_setting("scans_to_average", self.args.scans_to_average)
         self.device.change_setting("detector_tec_enable", True)
@@ -115,15 +201,13 @@ class Wasatch:
         self.attempt_reading()
         end_time = datetime.datetime.now()
 
-      
-        # compute how much longer we should wait before the next reading
         reading_time_ms = int((end_time - start_time).microseconds / 1000)
         sleep_ms = self.args.delay_ms - reading_time_ms
         if sleep_ms > 0:
-            print("sleeping %d ms (%d ms already passed)", sleep_ms, reading_time_ms)
+            log.debug(f"sleeping {sleep_ms} ms ({reading_time_ms} ms already passed)")
             try:
                 time.sleep(float(sleep_ms) / 1000)
-            except:
+            except Exception:
                 pass
         return True
 
@@ -154,32 +238,30 @@ class Wasatch:
     def acquire_reading(self):
         while True:
             reading = self.device.acquire_data()
-            if reading is None:
-                print("waiting on next reading")
-@@ -193,147 +237,221 @@ class Wasatch:
-            spectrum_min = numpy.amin(spectrum)
-            spectrum_max = numpy.amax(spectrum)
-            spectrum_avg = numpy.mean(spectrum)
-            spectrum_std = numpy.std (spectrum)
-            size_in_bytes = psutil.Process(os.getpid()).memory_info().rss
+            if reading is not None:
+                return reading
+            print("waiting on next reading")
+            time.sleep(0.05)
 
-            print("Reading: %10d  Detector: %5.2f degC  Min: %8.2f  Max: %8.2f  Avg: %8.2f  StdDev: %8.2f  Memory: %11d" % (
-                self.reading_count,
-                reading.detector_temperature_degC,
-                spectrum_min,
-                spectrum_max,
-                spectrum_avg,
-                spectrum_std,
-                size_in_bytes))
-            print("%s", str(reading))
+    def process_reading(self, reading):
+        spectrum = reading.spectrum
+        self.reading_count += 1
 
-        # if self.type == "light":
-        #     self.light_spectrum = spectrum
-        # elif self.type != "dark" and self.light_spectrum is not None:
-        #     # spectrum -= self.light_spectrum
-        #     spectrum = numpy.subtract( spectrum,self.light_spectrum)
+        spectrum_min = numpy.amin(spectrum)
+        spectrum_max = numpy.amax(spectrum)
+        spectrum_avg = numpy.mean(spectrum)
+        spectrum_std = numpy.std(spectrum)
+        size_in_bytes = psutil.Process(os.getpid()).memory_info().rss
 
-        # print(spectrum)
+        print("Reading: %10d  Detector: %5.2f degC  Min: %8.2f  Max: %8.2f  Avg: %8.2f  StdDev: %8.2f  Memory: %11d" % (
+            self.reading_count,
+            reading.detector_temperature_degC,
+            spectrum_min,
+            spectrum_max,
+            spectrum_avg,
+            spectrum_std,
+            size_in_bytes))
+        print(str(reading))
 
         if self.outfile:
             x, y, z = self.position
@@ -216,64 +298,51 @@ class Wasatch:
             unique_path = f"{base}_{counter}{ext}"
             counter += 1
         self.args.outfile = unique_path
-
         if self.outfile:
             try:
                 self.outfile.close()
             except Exception as e:
-                print("Error closing previous outfile: %s", str(e))
-
-        try:
-            file_exists = os.path.isfile(self.args.outfile)
-            file_has_data = file_exists and os.path.getsize(self.args.outfile) > 0
-
-            if file_has_data:
-                self.outfile = open(self.args.outfile, "a")
-            else:
-                self.outfile = open(self.args.outfile, "w")
-                self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
-
-            print('Filepath set to: %s', self.args.outfile)
-        except Exception as e:
-            print("Error initializing %s: %s", self.args.outfile, str(e))
-            self.outfile = None
+                print(f"Error closing previous outfile: {e}")
+        self.outfile = None
+        print(f'Filepath set to: {self.args.outfile}')
 
 
     def set_integration_time(self, integration_time_ms):
         self.args.integration_time_ms = integration_time_ms
-        print('Inetration time set to %i ms', integration_time_ms)
+        print(f'Inetration time set to {integration_time_ms} ms')
 
     def set_scans_to_average(self, scans_to_average):
         self.args.scans_to_average = scans_to_average
-        print('Scans to average set to %i', scans_to_average)
+        print(f'Scans to average set to {scans_to_average}')
 
     def set_boxcar_half_width(self, boxcar_half_width):
         self.args.boxcar_half_width = boxcar_half_width
-        print('Boxcar half width set to %i', boxcar_half_width)
+        print(f'Boxcar half width set to {boxcar_half_width}')
 
     def set_delay_ms(self, delay_ms):
         self.args.delay_ms = delay_ms
-        print('Delay set to %i ms', delay_ms)
+        print(f'Delay set to {delay_ms} ms')
 
     def set_max_spectra(self, max_spectra):
         self.args.max = max_spectra
-        print('Max spectra set to %i', max_spectra)
+        print(f'Max spectra set to {max_spectra}')
 
     def init_file(self):
-        if self.args.outfile:
-            try:
-                file_exists = os.path.isfile(self.args.outfile)
-                file_has_data = file_exists and os.path.getsize(self.args.outfile) > 0
-
-                if file_has_data:
-                    self.outfile = open(self.args.outfile, "a")  
-                else:
-                    self.outfile = open(self.args.outfile, "w")
-                    self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
-
-            except Exception as e:
-                print(f"Error initializing {self.args.outfile}: {e}")
-                self.outfile = None
+        if not self.args.outfile:
+            return
+        try:
+            file_exists = os.path.isfile(self.args.outfile)
+            file_has_data = file_exists and os.path.getsize(self.args.outfile) > 0
+            mode = "a" if file_has_data else "w"
+            self.outfile = open(self.args.outfile, mode)
+            if mode == "w" and getattr(self.device, "settings", None):
+                wavelengths = self.device.settings.wavelengths
+                self.outfile.write(
+                    "type;x;y;z;temp;%s\n" % ";".join(f"{x:.2f}" for x in wavelengths)
+                )
+        except Exception as e:
+            print(f"Error initializing {self.args.outfile}: {e}")
+            self.outfile = None
 
     def close_file(self):
         if self.args.outfile:
@@ -281,11 +350,11 @@ class Wasatch:
 
 
     def init_file_without_header(self):
-         if self.args.outfile:
+        if self.args.outfile:
             try:
                 self.outfile = open(self.args.outfile, "w")
-            except:
-                print("Error initializing %s", self.args.outfile)
+            except Exception:
+                print(f"Error initializing {self.args.outfile}")
                 self.outfile = None
 
     def update_points_plot(self):
@@ -311,9 +380,11 @@ class Wasatch:
                     [corners[e[0]][2], corners[e[1]][2]],
                     color='black'
                 )
-            self.points_ax.set_xlim(min(xs), max(xs))
-            self.points_ax.set_ylim(min(ys), max(ys))
-            self.points_ax.set_zlim(min(zs), max(zs))
+            if not self.points_zoomed:
+                self.points_ax.set_xlim(min(xs), max(xs))
+                self.points_ax.set_ylim(min(ys), max(ys))
+                self.points_ax.set_zlim(min(zs), max(zs))
+            self.points_ax.set_box_aspect([1, 1, 1])
             self.points_ax.invert_zaxis()
 
         if self.scan_points:
@@ -321,7 +392,9 @@ class Wasatch:
             for idx, key in enumerate(['1','2','3','4','5']):
                 pt = self.scan_points.get(key)
                 if pt:
-                    self.points_ax.scatter([pt['X']], [pt['Y']], [pt['Z']], color=colors[idx], marker='^', label=f'Point {key}')
+                    self.points_ax.scatter([pt['X']], [pt['Y']], [pt['Z']],
+                                          color=colors[idx], marker='^',
+                                          label=f'Point {key}')
 
         if self.predicted_points:
             xs, ys, zs = zip(*self.predicted_points)
@@ -338,21 +411,25 @@ class Wasatch:
         self.points_ax.set_ylabel('Y')
         self.points_ax.set_zlabel('Z')
         if self.scan_points:
-            self.points_ax.legend(loc='best')
-
+            handles, labels = self.points_ax.get_legend_handles_labels()
+            if handles:
+                self.points_ax.legend(loc='best')
+        self.points_ax.set_box_aspect([1, 1, 1])
         self.points_canvas.draw()
 
     def init_points_plot(self, frame):
         self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=frame)
         self.points_canvas.draw()
-        self.points_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
+        # use literal string to avoid depending on tkinter alias
+        self.points_canvas.get_tk_widget().pack(fill="both", expand=False)
 
     def init_spectrum_plot(self, frame):
         if self.canvas:
             return
         self.canvas = FigureCanvasTkAgg(self.fig, master=frame)
         self.canvas.draw()
-        self.canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
+        # use literal string to avoid depending on tkinter alias
+        self.canvas.get_tk_widget().pack(fill="both", expand=False)
 
 def signal_handler(signal, frame):
     print('\rInterrupted by Ctrl-C...shutting down', end=' ')
