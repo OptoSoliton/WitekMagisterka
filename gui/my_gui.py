@@ -11,6 +11,7 @@ PADX = 3
 PADY = 2
 FRAME_KWARGS = dict(padding=(PADX, PADY))
 
+
 class MyGUI:
     def __init__(self, root, serial_connection, wasatch):
         self.root = root
@@ -77,6 +78,7 @@ class MyGUI:
         self.serial_connection_frame = ttk.LabelFrame(self.left_frame, text="CNC serial connection", **FRAME_KWARGS)
         self.serial_connection_frame.grid(row=0, column=0, padx=PADX, pady=PADY, sticky="nw")
 
+
         self.serial_port_label = ttk.Label(self.serial_connection_frame, text="Port COM:")
         self.serial_port_label.grid(row=0, column=0, padx=PADX, pady=PADY)
 
@@ -90,6 +92,7 @@ class MyGUI:
         # Control frame for movement
         self.control_frame = ttk.LabelFrame(self.left_frame, text="CNC control", **FRAME_KWARGS)
         self.control_frame.grid(row=1, column=0, padx=PADX, pady=PADY, sticky="nw")
+
 
         # Movement buttons
         button = ttk.Button(self.control_frame, text='\u2190', 
@@ -141,6 +144,7 @@ class MyGUI:
         self.position_frame = ttk.LabelFrame(self.left_frame, text="Position configuration", **FRAME_KWARGS)
         self.position_frame.grid(row=3, column=0, padx=PADX, pady=PADY, sticky="nw")
 
+
         # Position buttons
         self.set_button_1 = ttk.Button(self.position_frame, text="Set 1", command=lambda: self.set_position(1))
         self.set_button_1.grid(row=0, column=0, padx=PADX, pady=PADY)
@@ -180,6 +184,7 @@ class MyGUI:
         self.manual_command_frame = ttk.LabelFrame(self.left_frame, text="Manual command", **FRAME_KWARGS)
         self.manual_command_frame.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="nw")
 
+
         self.manual_command_label = ttk.Label(self.manual_command_frame, text="Command:")
         self.manual_command_label.grid(row=0, column=0, padx=PADX, pady=PADY)
 
@@ -193,6 +198,7 @@ class MyGUI:
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
         self.log_frame.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="nw")
 
+
         self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=8, width=50)
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
@@ -200,12 +206,14 @@ class MyGUI:
         self.wasatch_connection_frame = ttk.LabelFrame(self.right_frame, text="Wasatch connection", **FRAME_KWARGS)
         self.wasatch_connection_frame.grid(row=0, column=1, padx=PADX, pady=PADY, sticky="nw")
 
+
         self.wasatch_connect_button = ttk.Button(self.wasatch_connection_frame, text = "Connect spectrometer", command=self.wasatch.connect)
         self.wasatch_connect_button.grid(row=0, column=0, padx=PADX, pady=PADY)
 
         # File path selection for saving spectra
         self.file_path_frame = ttk.LabelFrame(self.right_frame, text="File path for spectra", **FRAME_KWARGS)
         self.file_path_frame.grid(row=1, column=1, padx=PADX, pady=PADY, sticky="nw")
+
 
         self.file_path_label = ttk.Label(self.file_path_frame, text="File path:")
         self.file_path_label.grid(row=0, column=0, padx=PADX, pady=PADY)
@@ -222,6 +230,7 @@ class MyGUI:
         # Wasatch parameters
         self.wasatch_parameters_frame = ttk.LabelFrame(self.right_frame, text="Parameters", **FRAME_KWARGS)
         self.wasatch_parameters_frame.grid(row=2, column=1, padx=PADX, pady=PADY, sticky="nw")
+
 
         # Integration time control
         self.integration_time_label = ttk.Label(self.wasatch_parameters_frame, text="Integration Time (ms):")
@@ -272,6 +281,7 @@ class MyGUI:
         self.wasatch_measure_frame = ttk.LabelFrame(self.right_frame, text="Measuring", **FRAME_KWARGS)
         self.wasatch_measure_frame.grid(row=3, column=1, padx=PADX, pady=PADY, sticky="nw")
 
+
         self.wasatch_samples_countX_label = ttk.Label(self.wasatch_measure_frame, text="Sample count X axis")
         self.wasatch_samples_countX_label.grid(row=0, column=1, padx=PADX, pady=PADY)
         self.wasatch_samples_countX_entry = ttk.Entry(self.wasatch_measure_frame)
@@ -318,6 +328,7 @@ class MyGUI:
         self.run_once_label = ttk.Label(self.wasatch_measure_frame, text="Label:")
         self.run_once_label.grid(row=5, column=0, padx=PADX, pady=PADY)
 
+
         self.run_once_description = ttk.Entry(self.wasatch_measure_frame, width=30)
         self.run_once_description.grid(row=5, column=1, columnspan=2, padx=PADX, pady=PADY)
 
@@ -329,6 +340,7 @@ class MyGUI:
 
         self.wasatch_stop_button = ttk.Button(self.wasatch_measure_frame, text="Stop", command=self.stop_measurement)
         self.wasatch_stop_button.grid(row=6, column=2, padx=PADX, pady=PADY)
+
 
         self.pause_button = ttk.Button(
             self.wasatch_measure_frame,
@@ -367,6 +379,7 @@ class MyGUI:
 
         # 3D head position preview
         self.map_frame = ttk.LabelFrame(self.right_frame, text="Head position 3D", **FRAME_KWARGS)
+
         self.map_frame.grid(row=0, column=2, padx=PADX, pady=PADY, sticky="ne")
         self.map_fig = Figure(figsize=(2.5, 2.5), dpi=100)
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
@@ -386,6 +399,7 @@ class MyGUI:
 
         # Points preview under head position
         self.points_frame = ttk.LabelFrame(self.right_frame, text="Scan points", **FRAME_KWARGS)
+
         self.points_frame.grid(row=1, column=2, padx=PADX, pady=PADY, sticky="ne")
         self.wasatch.init_points_plot(self.points_frame)
         zoom_frame = ttk.Frame(self.points_frame)
@@ -395,6 +409,7 @@ class MyGUI:
 
         # Spectrum plot below scan points
         self.spectrum_frame = ttk.LabelFrame(self.right_frame, text="Spectrum", **FRAME_KWARGS)
+
         self.spectrum_frame.grid(row=2, column=2, padx=PADX, pady=PADY, sticky="ne")
         self.wasatch.init_spectrum_plot(self.spectrum_frame)
         zoom_frame = ttk.Frame(self.spectrum_frame)
@@ -853,6 +868,7 @@ class MyGUI:
         end_y = self.user_positions['4']['Y'] if self.user_positions['4'] else start_y
         end_z = self.user_positions['5']['Z'] if self.user_positions['5'] else start_z
 
+
         step_x = (end_x - start_x) / (self.samples_count_x - 1) if self.samples_count_x > 1 else 0
         step_y = (end_y - start_y) / (self.samples_count_y - 1) if self.samples_count_y > 1 else 0
         step_z = (end_z - start_z) / (self.samples_count_z - 1) if self.samples_count_z > 1 else 0
@@ -879,6 +895,7 @@ class MyGUI:
             start_y, end_y,
             start_z,
             end_z,
+
             self.user_positions,
             self.samples_count_x,
             self.samples_count_y,
@@ -904,6 +921,7 @@ class MyGUI:
                     rel_x = i * step_x
                     abs_x = start_x + rel_x
                     self.log(f"  X step {i+1}/{self.samples_count_x} at X={abs_x}")
+
                     isChangedX = True
                     for j in range(self.samples_count_y):
                         if not self.running:
@@ -914,6 +932,7 @@ class MyGUI:
                         abs_y = start_y + rel_y
                         self.log(f"    Y step {j+1}/{self.samples_count_y} at Y={abs_y}")
                         move_command = f'G1 X{ rel_x } Y{ rel_y } Z{ rel_z } F{self.get_speed()}'
+
                         self.serial.send_gcode(move_command)
                         self.log(f"Moving to position X: {abs_x}, Y: {abs_y}, Z: {abs_z}")
                         self.waitForCNC()
