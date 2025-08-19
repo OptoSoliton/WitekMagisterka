@@ -27,6 +27,7 @@ class TkLogHandler(logging.Handler):
         except Exception:
             pass
 
+
 class MyGUI:
     def __init__(self, root, serial_connection, wasatch):
         self.root = root
@@ -35,10 +36,12 @@ class MyGUI:
         self.root.title("CNC & Wasatch Controller")
         # default to Full HD layout to keep controls and plots visible
         self.root.geometry("1920x1080")
+
         try:
             self.root.state('zoomed')
         except Exception:
             pass
+
 
         # scrollable container so every widget is accessible even on small screens
         self.canvas = tk.Canvas(self.root)
@@ -107,6 +110,7 @@ class MyGUI:
         self.serial_connection_frame = ttk.LabelFrame(self.left_frame, text="CNC serial connection", **FRAME_KWARGS)
         self.serial_connection_frame.grid(row=0, column=0, padx=PADX, pady=PADY, sticky="nw")
 
+
         self.serial_port_label = ttk.Label(self.serial_connection_frame, text="Port COM:")
         self.serial_port_label.grid(row=0, column=0, padx=PADX, pady=PADY)
 
@@ -120,6 +124,7 @@ class MyGUI:
         # Control frame for movement
         self.control_frame = ttk.LabelFrame(self.left_frame, text="CNC control", **FRAME_KWARGS)
         self.control_frame.grid(row=1, column=0, padx=PADX, pady=PADY, sticky="nw")
+
 
         # Movement buttons
         button = ttk.Button(self.control_frame, text='\u2190', 
@@ -171,6 +176,7 @@ class MyGUI:
         self.position_frame = ttk.LabelFrame(self.left_frame, text="Position configuration", **FRAME_KWARGS)
         self.position_frame.grid(row=3, column=0, padx=PADX, pady=PADY, sticky="nw")
 
+
         # Position buttons arranged as 1 3 / 2 4 with 5 on the right
         self.set_button_1 = ttk.Button(self.position_frame, text="Set 1", command=lambda: self.set_position(1))
         self.set_button_1.grid(row=0, column=0, padx=PADX, pady=PADY)
@@ -191,6 +197,7 @@ class MyGUI:
         )
         self.set_button_5.grid(row=0, column=2, rowspan=2, padx=(PADX*3, PADX), pady=PADY)
 
+
         # goto buttons aligned with the set buttons
         self.goto_button_1 = ttk.Button(self.position_frame, text="Go to 1", command=lambda: self.goto_position(1))
         self.goto_button_1.grid(row=0, column=3, padx=PADX, pady=PADY)
@@ -209,10 +216,12 @@ class MyGUI:
         # Adding "Init" Button to send initialization commands
         self.init_button = ttk.Button(self.position_frame, text="Goto 0.0", command=self.move_to_zero)
         self.init_button.grid(row=2, column=4,  padx=PADX, pady=PADY)
+
         
         # Manual command frame
         self.manual_command_frame = ttk.LabelFrame(self.left_frame, text="Manual command", **FRAME_KWARGS)
         self.manual_command_frame.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="nw")
+
 
         self.manual_command_label = ttk.Label(self.manual_command_frame, text="Command:")
         self.manual_command_label.grid(row=0, column=0, padx=PADX, pady=PADY)
@@ -241,6 +250,7 @@ class MyGUI:
         self.file_path_frame = ttk.LabelFrame(self.controls_frame, text="File path for spectra", **FRAME_KWARGS)
         self.file_path_frame.pack(fill='x', padx=PADX, pady=PADY)
 
+
         self.file_path_label = ttk.Label(self.file_path_frame, text="File path:")
         self.file_path_label.grid(row=0, column=0, padx=PADX, pady=PADY)
 
@@ -256,6 +266,7 @@ class MyGUI:
         # Wasatch parameters
         self.wasatch_parameters_frame = ttk.LabelFrame(self.controls_frame, text="Parameters", **FRAME_KWARGS)
         self.wasatch_parameters_frame.pack(fill='x', padx=PADX, pady=PADY)
+
 
         # Integration time control
         self.integration_time_label = ttk.Label(self.wasatch_parameters_frame, text="Integration Time (ms):")
@@ -352,6 +363,7 @@ class MyGUI:
         self.run_once_label = ttk.Label(self.wasatch_measure_frame, text="Label:")
         self.run_once_label.grid(row=5, column=0, padx=PADX, pady=PADY)
 
+
         self.run_once_description = ttk.Entry(self.wasatch_measure_frame, width=30)
         self.run_once_description.grid(row=5, column=1, columnspan=2, padx=PADX, pady=PADY)
 
@@ -363,6 +375,7 @@ class MyGUI:
 
         self.wasatch_stop_button = ttk.Button(self.wasatch_measure_frame, text="Stop", command=self.stop_measurement)
         self.wasatch_stop_button.grid(row=6, column=2, padx=PADX, pady=PADY)
+
 
         self.pause_button = ttk.Button(
             self.wasatch_measure_frame,
@@ -383,6 +396,7 @@ class MyGUI:
             self.wasatch_measure_frame, textvariable=self.estimated_time_var
         )
         self.estimated_time_label.grid(row=8, column=0, columnspan=4, padx=PADX, pady=PADY)
+
 
         # list of widgets disabled during a long scan
         self.disable_on_run = [
@@ -408,6 +422,7 @@ class MyGUI:
         # 3D head position preview
         self.map_frame = ttk.LabelFrame(self.plots_frame, text="Head position 3D", **FRAME_KWARGS)
         self.map_frame.pack(padx=PADX, pady=PADY)
+
         self.map_fig = Figure(figsize=(2.5, 2.5), dpi=100)
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
         try:
@@ -431,6 +446,7 @@ class MyGUI:
         # Points preview under head position
         self.points_frame = ttk.LabelFrame(self.plots_frame, text="Scan points", **FRAME_KWARGS)
         self.points_frame.pack(padx=PADX, pady=PADY)
+
         self.wasatch.init_points_plot(self.points_frame)
         zoom_frame = ttk.Frame(self.points_frame)
         zoom_frame.pack()
@@ -473,6 +489,7 @@ class MyGUI:
             text="🔍-",
             command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25),
         ).pack(side="left")
+
 
         self.help_button = ttk.Button(self.right_frame, text="Help", command=self.show_help)
         self.help_button.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="ew")
@@ -528,6 +545,7 @@ class MyGUI:
             ax.set_ylim3d(ymid - yspan, ymid + yspan)
             ax.set_zlim3d(zmid - zspan, zmid + zspan)
             ax.set_box_aspect([1, 1, 1])
+
         else:
             xlim = ax.get_xlim()
             ylim = ax.get_ylim()
@@ -538,6 +556,7 @@ class MyGUI:
             ax.set_xlim(xmid - xspan, xmid + xspan)
             ax.set_ylim(ymid - yspan, ymid + yspan)
         canvas.draw_idle()
+
         if ax is self.map_ax:
             self.map_zoomed = True
         elif ax is self.wasatch.points_ax:
@@ -555,6 +574,7 @@ class MyGUI:
             shift = span * frac
             ax.set_ylim(lim[0] + shift, lim[1] + shift)
         canvas.draw_idle()
+
 
     def set_integration_time(self):
         integration_time = int(self.integration_time_entry.get())
@@ -614,6 +634,7 @@ class MyGUI:
 
         defined = [p for p in self.user_positions.values() if p]
         if len(defined) < 2:
+
             self.wasatch.scan_points = self.user_positions
             self.wasatch.points_zoomed = False
             self.wasatch.update_points_plot()
@@ -632,6 +653,7 @@ class MyGUI:
                 x1, x2,
                 y1, y2,
                 z1, z2,
+
                 self.user_positions,
                 count_x,
                 count_y,
@@ -683,6 +705,7 @@ class MyGUI:
             % (self.integration_time, self.scans_to_average, self.delay_ms, move_delay, per_point)
         )
         # with absolute moves there is no separate row reset delay
+
         self.log(f"Estimated total time {total_ms/1000:.2f} s")
 
         self.estimated_time_var.set(
@@ -729,6 +752,7 @@ class MyGUI:
         elif direction == '\u2192':  # Right (X-)
             self.current_position['X'] -= step
             command = f'G1 X-{step} F{speed}'
+
         elif direction == 'Up':  # Up (Z+)
             self.current_position['Z'] += step
             command = f'G1 Z{step} F{speed}'
@@ -959,6 +983,7 @@ class MyGUI:
             self.disable_controls()
             self.log("Starting run-area measurement")
             self.log(self.estimated_time_var.get())
+
             # New thread for measuring
             if not self.measure_thread or not self.measure_thread.is_alive():
                 self.measure_thread = threading.Thread(target=self.measure_and_move)
@@ -1025,6 +1050,7 @@ class MyGUI:
             f"G1 X{start_x} Y{start_y} Z{start_z} F{self.get_speed()}"
         )
         self.serial.send_gcode(start_cmd)
+
         self.log(
             f"Moving to start position X: {start_x}, Y: {start_y}, Z: {start_z}"
         )
@@ -1032,10 +1058,12 @@ class MyGUI:
         self.current_position = {'X': start_x, 'Y': start_y, 'Z': start_z}
         self.update_map_position(start_x, start_y, start_z)
 
+
         total_points = self.samples_count_x * self.samples_count_y * self.samples_count_z
         self.log(f"Total scan points: {total_points}")
         self.wasatch.points = []
         self.wasatch.update_points_plot()
+
         current_measure = 0
         measure_count = total_points
 
@@ -1049,6 +1077,7 @@ class MyGUI:
                 for i in range(self.samples_count_x):
                     abs_x = start_x + i * step_x
                     self.log(f"  X step {i+1}/{self.samples_count_x} at X={abs_x}")
+
                     for j in range(self.samples_count_y):
                         if not self.running:
                             break
@@ -1063,6 +1092,7 @@ class MyGUI:
                         self.log(
                             f"Moving to position X: {abs_x}, Y: {abs_y}, Z: {abs_z}"
                         )
+
                         self.waitForCNC()
                         dx = abs(abs_x - self.current_position['X'])
                         dy = abs(abs_y - self.current_position['Y'])
@@ -1085,6 +1115,7 @@ class MyGUI:
                     if not self.running:
                         self.log("Stopped.")
                         break
+
 
             self.serial.send_gcode('G91')
             self.running = False
