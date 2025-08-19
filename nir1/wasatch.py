@@ -436,7 +436,6 @@ class Wasatch:
 
         self.points_canvas.get_tk_widget().after(0, _do)
 
-
     def init_points_plot(self, frame):
         self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=frame)
         self.points_canvas.draw()
