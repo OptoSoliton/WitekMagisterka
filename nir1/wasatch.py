@@ -48,7 +48,7 @@ class Wasatch:
         self.predicted_points = None
         self.position = (None, None, None)
         self.bounds = None
-        self.reading_count = 0
+
 
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
@@ -242,6 +242,19 @@ class Wasatch:
                 reading.detector_temperature_degC,
                 ";".join(format(x, ".2f") for x in spectrum)))
 
+        # print(spectrum)
+
+        if self.outfile:
+            x, y, z = self.position
+            self.outfile.write("%s;%s;%s;%s;%.2f;%s\n" % (
+                self.type,
+                format(x, ".2f") if x is not None else "",
+                format(y, ".2f") if y is not None else "",
+                format(z, ".2f") if z is not None else "",
+                reading.detector_temperature_degC,
+                ";".join(format(x, ".2f") for x in spectrum)))
+
+
         if None not in self.position:
             self.points.append(self.position)
             self.update_points_plot()
@@ -267,13 +280,28 @@ class Wasatch:
             unique_path = f"{base}_{counter}{ext}"
             counter += 1
         self.args.outfile = unique_path
+
         if self.outfile:
             try:
                 self.outfile.close()
             except Exception as e:
-                print(f"Error closing previous outfile: {e}")
-        self.outfile = None
-        print(f'Filepath set to: {self.args.outfile}')
+                print("Error closing previous outfile: %s", str(e))
+
+        try:
+            file_exists = os.path.isfile(self.args.outfile)
+            file_has_data = file_exists and os.path.getsize(self.args.outfile) > 0
+
+            if file_has_data:
+                self.outfile = open(self.args.outfile, "a")
+            else:
+                self.outfile = open(self.args.outfile, "w")
+                self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
+
+            print('Filepath set to: %s', self.args.outfile)
+        except Exception as e:
+            print("Error initializing %s: %s", self.args.outfile, str(e))
+            self.outfile = None
+
 
 
     def set_integration_time(self, integration_time_ms):
@@ -297,19 +325,21 @@ class Wasatch:
         print(f'Max spectra set to {max_spectra}')
 
     def init_file(self):
-        if not self.args.outfile:
-            return
-        try:
-            file_exists = os.path.isfile(self.args.outfile)
-            file_has_data = file_exists and os.path.getsize(self.args.outfile) > 0
-            mode = "a" if file_has_data else "w"
-            self.outfile = open(self.args.outfile, mode)
-            if mode == "w" and self.device:
-                wavelengths = self.device.settings.wavelengths
-                self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(f"{x:.2f}" for x in wavelengths))
-        except Exception as e:
-            print(f"Error initializing {self.args.outfile}: {e}")
-            self.outfile = None
+        if self.args.outfile:
+            try:
+                file_exists = os.path.isfile(self.args.outfile)
+                file_has_data = file_exists and os.path.getsize(self.args.outfile) > 0
+
+                if file_has_data:
+                    self.outfile = open(self.args.outfile, "a")  
+                else:
+                    self.outfile = open(self.args.outfile, "w")
+                    self.outfile.write("type;x;y;z;temp;%s\n" % ";".join(format(x, ".2f") for x in self.device.settings.wavelengths))
+
+            except Exception as e:
+                print(f"Error initializing {self.args.outfile}: {e}")
+                self.outfile = None
+
 
     def close_file(self):
         if self.args.outfile:
