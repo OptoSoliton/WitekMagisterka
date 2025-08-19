@@ -563,17 +563,19 @@ class MyGUI:
         if z is None:
             z = self.current_position['Z']
 
-        self.position_label.config(text=f"X:{x:.1f} Y:{y:.1f} Z:{z:.1f}")
+        def _do():
+            self.position_label.config(text=f"X:{x:.1f} Y:{y:.1f} Z:{z:.1f}")
 
-        # update head dot
-        if self.head_dot:
-            self.head_dot.remove()
-        self.head_dot = self.map_ax.scatter([x], [y], [z], c='red', s=80, alpha=0.6)
+            if self.head_dot:
+                self.head_dot.remove()
+            self.head_dot = self.map_ax.scatter([x], [y], [z], c='red', s=80, alpha=0.6)
 
-        self.wasatch.position = (x, y, z)
-        self.update_volume_display()
-        self.map_canvas.draw()
-        self.wasatch.update_points_plot()
+            self.wasatch.position = (x, y, z)
+            self.update_volume_display()
+            self.map_canvas.draw()
+            self.wasatch.update_points_plot()
+
+        self.root.after(0, _do)
 
 
     def update_volume_display(self):
@@ -864,7 +866,7 @@ class MyGUI:
 
     def waitForCNC(self):
         while not self.serial.wait_for_ending_move():
-            pass
+            time.sleep(0.01)
 
     def measureDelayFromSteps(self, step):
         wait_time_ms = self.interpolate_time(step) + 100
