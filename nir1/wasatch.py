@@ -65,6 +65,13 @@ class Wasatch:
             step_z = (z2 - z1) / (count_z - 1) if count_z > 1 else 0
             total = max(count_x * count_y * count_z, 1)
             counter = 0
+            if log_cb:
+                log_cb(
+                    f"Bounds: x1={x1}, x2={x2}, y1={y1}, y2={y2}, z1={z1}, z2={z2}"
+                )
+                log_cb(
+                    f"Step sizes: step_x={step_x}, step_y={step_y}, step_z={step_z}"
+                )
             if progress_cb:
                 progress_cb(0)
             for k in range(count_z):
@@ -350,7 +357,15 @@ class Wasatch:
                     [corners[e[0]][2], corners[e[1]][2]],
                     color='black'
                 )
-@@ -323,58 +362,60 @@ class Wasatch:
+            self.points_ax.set_xlim(min(xs), max(xs))
+            self.points_ax.set_ylim(min(ys), max(ys))
+            self.points_ax.set_zlim(min(zs), max(zs))
+            self.points_ax.invert_zaxis()
+
+        if self.scan_points:
+            colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
+            for idx, key in enumerate(['1','2','3','4','5']):
+                pt = self.scan_points.get(key)
                 if pt:
                     self.points_ax.scatter([pt['X']], [pt['Y']], [pt['Z']], color=colors[idx], marker='^', label=f'Point {key}')
 
