@@ -90,6 +90,7 @@ class MyGUI:
         self.running = False
         self.paused = False
         self.measure_thread = threading.Thread()
+        self.pause_position = None
 
     def setup_ui(self):
 
@@ -250,7 +251,6 @@ class MyGUI:
         self.file_path_frame = ttk.LabelFrame(self.controls_frame, text="File path for spectra", **FRAME_KWARGS)
         self.file_path_frame.pack(fill='x', padx=PADX, pady=PADY)
 
-
         self.file_path_label = ttk.Label(self.file_path_frame, text="File path:")
         self.file_path_label.grid(row=0, column=0, padx=PADX, pady=PADY)
 
@@ -363,7 +363,6 @@ class MyGUI:
         self.run_once_label = ttk.Label(self.wasatch_measure_frame, text="Label:")
         self.run_once_label.grid(row=5, column=0, padx=PADX, pady=PADY)
 
-
         self.run_once_description = ttk.Entry(self.wasatch_measure_frame, width=30)
         self.run_once_description.grid(row=5, column=1, columnspan=2, padx=PADX, pady=PADY)
 
@@ -453,14 +452,18 @@ class MyGUI:
         ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 0.8, True)).pack(side="left")
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
 
-        # Spectrum plot below scan points
-        self.spectrum_frame = ttk.LabelFrame(self.plots_frame, text="Spectrum", **FRAME_KWARGS)
-        self.spectrum_frame.pack(padx=PADX, pady=PADY)
+        # Spectrum plot centered under measuring controls
+        self.spectrum_frame = ttk.LabelFrame(
+            self.controls_frame, text="Spectrum", **FRAME_KWARGS
+        )
+        self.spectrum_frame.pack(padx=PADX, pady=PADY, anchor='n')
+
         self.wasatch.init_spectrum_plot(self.spectrum_frame)
         zoom_frame = ttk.Frame(self.spectrum_frame)
         zoom_frame.pack()
         ttk.Button(
             zoom_frame,
+          #USUN JAKBY CO OD TAD
             text="◀",
             command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1),
         ).pack(side="left")
@@ -481,6 +484,8 @@ class MyGUI:
         ).pack(side="left")
         ttk.Button(
             zoom_frame,
+          #USUN JAKBY CO DO TAD
+
             text="🔍+",
             command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8),
         ).pack(side="left")
@@ -544,6 +549,7 @@ class MyGUI:
             ax.set_xlim3d(xmid - xspan, xmid + xspan)
             ax.set_ylim3d(ymid - yspan, ymid + yspan)
             ax.set_zlim3d(zmid - zspan, zmid + zspan)
+            ax.auto_scale_xyz(ax.get_xlim3d(), ax.get_ylim3d(), ax.get_zlim3d())
             ax.set_box_aspect([1, 1, 1])
 
         else:
@@ -647,6 +653,22 @@ class MyGUI:
         x1, x2 = min(xs), max(xs)
         y1, y2 = min(ys), max(ys)
         z1, z2 = min(zs), max(zs)
+        if x1 == x2:
+            if count_x > 1:
+                self.wasatch_samples_countX_entry.delete(0, tk.END)
+                self.wasatch_samples_countX_entry.insert(0, '1')
+            count_x = 1
+        if y1 == y2:
+            if count_y > 1:
+                self.wasatch_samples_countY_entry.delete(0, tk.END)
+                self.wasatch_samples_countY_entry.insert(0, '1')
+            count_y = 1
+        if z1 == z2:
+            if count_z > 1:
+                self.wasatch_samples_countZ_entry.delete(0, tk.END)
+                self.wasatch_samples_countZ_entry.insert(0, '1')
+            count_z = 1
+
         try:
             self.wasatch.points_zoomed = False
             self.wasatch.set_scan_bounds(
@@ -674,16 +696,37 @@ class MyGUI:
             self.estimated_time_var.set("Estimated time: n/a")
             return
 
-        if not self.user_positions.get('1') or not self.user_positions.get('2'):
+        defined = [p for p in self.user_positions.values() if p]
+        if len(defined) < 2:
             self.estimated_time_var.set("Estimated time: n/a")
             return
 
-        start_x = self.user_positions['1']['X']
-        start_y = self.user_positions['1']['Y']
-        start_z = self.user_positions['1']['Z']
-        end_x = self.user_positions['2']['X']
-        end_y = self.user_positions['4']['Y'] if self.user_positions['4'] else start_y
-        end_z = self.user_positions['5']['Z'] if self.user_positions['5'] else start_z
+        if self.wasatch.bounds:
+            start_x, end_x, start_y, end_y, start_z, end_z = (
+                self.wasatch.bounds[0], self.wasatch.bounds[1],
+                self.wasatch.bounds[2], self.wasatch.bounds[3],
+                self.wasatch.bounds[4], self.wasatch.bounds[5],
+            )
+        else:
+            start_x = self.user_positions['1']['X']
+            start_y = self.user_positions['1']['Y']
+            start_z = self.user_positions['1']['Z']
+            end_x = self.user_positions['2']['X'] if self.user_positions['2'] else start_x
+            end_y = self.user_positions['4']['Y'] if self.user_positions['4'] else start_y
+            end_z = self.user_positions['5']['Z'] if self.user_positions['5'] else start_z
+        if start_x == end_x and count_x > 1:
+            self.wasatch_samples_countX_entry.delete(0, tk.END)
+            self.wasatch_samples_countX_entry.insert(0, '1')
+            count_x = 1
+        if start_y == end_y and count_y > 1:
+            self.wasatch_samples_countY_entry.delete(0, tk.END)
+            self.wasatch_samples_countY_entry.insert(0, '1')
+            count_y = 1
+        if start_z == end_z and count_z > 1:
+            self.wasatch_samples_countZ_entry.delete(0, tk.END)
+            self.wasatch_samples_countZ_entry.insert(0, '1')
+            count_z = 1
+
 
         step_x = (end_x - start_x) / (count_x - 1) if count_x > 1 else 0
         step_y = (end_y - start_y) / (count_y - 1) if count_y > 1 else 0
@@ -746,12 +789,12 @@ class MyGUI:
         elif direction == '\u2193':  # Rear (Y-)
             self.current_position['Y'] -= step
             command = f'G1 Y-{step} F{speed}'
-        elif direction == '\u2190':  # Left (X+)
-            self.current_position['X'] += step
-            command = f'G1 X{step} F{speed}'
-        elif direction == '\u2192':  # Right (X-)
+        elif direction == '\u2190':  # Left (X-)
             self.current_position['X'] -= step
             command = f'G1 X-{step} F{speed}'
+        elif direction == '\u2192':  # Right (X+)
+            self.current_position['X'] += step
+            command = f'G1 X{step} F{speed}'
 
         elif direction == 'Up':  # Up (Z+)
             self.current_position['Z'] += step
@@ -864,6 +907,12 @@ class MyGUI:
             self.map_ax.set_ylim(min(ys), max(ys))
             self.map_ax.set_zlim(min(zs), max(zs))
         self.map_ax.set_box_aspect([1, 1, 1])
+        self.map_ax.auto_scale_xyz(
+            self.map_ax.get_xlim3d(),
+            self.map_ax.get_ylim3d(),
+            self.map_ax.get_zlim3d(),
+        )
+
         self.map_ax.invert_zaxis()
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
@@ -963,20 +1012,15 @@ class MyGUI:
         self.stop_measurement()
 
         if not self.running:
-            # determine which reference points are required
-            samples_z = int(self.wasatch_samples_countZ_entry.get())
-            required = ['1', '2']
-            if int(self.wasatch_samples_countY_entry.get()) > 1:
-                required.append('4')
-            if samples_z > 1:
-                required.append('5')
-            missing = [k for k in required if self.user_positions.get(k) is None]
-            if missing:
-                self.log('Set positions ' + ','.join(missing) + ' first')
+            defined = [k for k, v in self.user_positions.items() if v]
+            if len(defined) < 2:
+                self.log('Set at least two positions first')
+
                 return
             if not self.serial.connected:
                 self.log('CNC not connected')
                 return
+            self.calculate_predicted_points()
             self.ensure_file_path()
             self.update_time_estimate()
             self.running = True
@@ -1026,16 +1070,21 @@ class MyGUI:
         self.samples_count_y = int(self.wasatch_samples_countY_entry.get())
         self.samples_count_z = int(self.wasatch_samples_countZ_entry.get())
 
-        start_x = self.user_positions['1']['X']
-        start_y = self.user_positions['1']['Y']
-        start_z = self.user_positions['1']['Z']
-        end_x = self.user_positions['2']['X']
-        end_y = self.user_positions['4']['Y'] if self.user_positions['4'] else start_y
-        end_z = self.user_positions['5']['Z'] if self.user_positions['5'] else start_z
+        x1, x2, y1, y2, z1, z2 = self.wasatch.bounds
+        start_x, start_y, start_z = x1, y1, z1
+        end_x, end_y, end_z = x2, y2, z2
+
+        if x1 == x2:
+            self.samples_count_x = 1
+        if y1 == y2:
+            self.samples_count_y = 1
+        if z1 == z2:
+            self.samples_count_z = 1
 
         step_x = (end_x - start_x) / (self.samples_count_x - 1) if self.samples_count_x > 1 else 0
         step_y = (end_y - start_y) / (self.samples_count_y - 1) if self.samples_count_y > 1 else 0
         step_z = (end_z - start_z) / (self.samples_count_z - 1) if self.samples_count_z > 1 else 0
+
 
         self.log(
             f"Bounds: x1={start_x}, x2={end_x}, y1={start_y}, y2={end_y}, z1={start_z}, z2={end_z}"
@@ -1179,6 +1228,7 @@ class MyGUI:
         self.paused = True
         self.dark_taken = False
         self.continue_button.config(state=tk.DISABLED)
+        self.pause_position = self.current_position.copy()
         self.log("Paused. Take dark reference and optionally light, then press Continue")
 
     def continue_measurement(self):
@@ -1187,6 +1237,14 @@ class MyGUI:
         if not self.dark_taken:
             self.log("Take dark reference before continuing")
             return
+        # return to stored pause position
+        target = self.pause_position
+        move_cmd = f"G1 X{target['X']} Y{target['Y']} Z{target['Z']} F{self.get_speed()}"
+        self.serial.send_gcode('G90')
+        self.serial.send_gcode(move_cmd)
+        self.waitForCNC()
+        self.current_position = target.copy()
+        self.update_map_position(target['X'], target['Y'], target['Z'])
         self.paused = False
         self.continue_button.config(state=tk.DISABLED)
         self.log("Resuming measurement")
