@@ -34,7 +34,7 @@ class MyGUI:
         self.serial = serial_connection
         self.wasatch = wasatch
         self.root.title("CNC & Wasatch Controller")
-
+        # default to Full HD layout to keep controls and plots visible
         self.root.geometry("1920x1080")
 
         try:
@@ -459,11 +459,37 @@ class MyGUI:
         self.wasatch.init_spectrum_plot(self.spectrum_frame)
         zoom_frame = ttk.Frame(self.spectrum_frame)
         zoom_frame.pack()
-        ttk.Button(zoom_frame, text="◀", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1)).pack(side="left")
-        ttk.Button(zoom_frame, text="▶", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1)).pack(side="left")
+        ttk.Button(
+            zoom_frame,
+            text="◀",
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1),
+        ).pack(side="left")
+        ttk.Button(
+            zoom_frame,
+            text="▶",
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1),
+        ).pack(side="left")
+        ttk.Button(
+            zoom_frame,
+            text="▲",
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='y'),
+        ).pack(side="left")
+        ttk.Button(
+            zoom_frame,
+            text="▼",
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='y'),
+        ).pack(side="left")
+        ttk.Button(
+            zoom_frame,
+            text="🔍+",
+            command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8),
+        ).pack(side="left")
+        ttk.Button(
+            zoom_frame,
+            text="🔍-",
+            command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25),
+        ).pack(side="left")
 
-        ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8)).pack(side="left")
-        ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25)).pack(side="left")
 
         self.help_button = ttk.Button(self.right_frame, text="Help", command=self.show_help)
         self.help_button.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="ew")
@@ -536,10 +562,17 @@ class MyGUI:
         elif ax is self.wasatch.points_ax:
             self.wasatch.points_zoomed = True
 
-    def pan_axes(self, ax, canvas, frac):
-        xlim = ax.get_xlim()
-        shift = (xlim[1] - xlim[0]) * frac
-        ax.set_xlim(xlim[0] + shift, xlim[1] + shift)
+    def pan_axes(self, ax, canvas, frac, axis='x'):
+        if axis == 'x':
+            lim = ax.get_xlim()
+            span = lim[1] - lim[0]
+            shift = span * frac
+            ax.set_xlim(lim[0] + shift, lim[1] + shift)
+        else:
+            lim = ax.get_ylim()
+            span = lim[1] - lim[0]
+            shift = span * frac
+            ax.set_ylim(lim[0] + shift, lim[1] + shift)
         canvas.draw_idle()
 
 
@@ -551,7 +584,9 @@ class MyGUI:
 
     def set_scans_to_average(self):
         scans_to_average = int(self.scans_to_average_entry.get())
+        self.scans_to_average = scans_to_average
         self.wasatch.set_scans_to_average(scans_to_average)
+        self.update_time_estimate()
 
     def set_boxcar_half_width(self):
         boxcar_half_width = int(self.boxcar_half_width_entry.get())
@@ -662,16 +697,15 @@ class MyGUI:
         )
 
         measure_count = max(count_x * count_y * count_z, 1)
-        move_delay = self.interpolate_time(max(step_x, step_y, step_z))
-        row_delay = self.interpolate_time(step_x * count_x) if step_x else 0
-        per_point = self.integration_time + self.delay_ms + move_delay
-        total_ms = measure_count * per_point + (count_x * count_z) * row_delay
+        move_delay = self.interpolate_time(max(abs(step_x), abs(step_y), abs(step_z)))
+        per_point = self.integration_time * self.scans_to_average + self.delay_ms + move_delay
+        total_ms = measure_count * per_point
         self.log(
-            f"Per point: integration={self.integration_time}ms, delay={self.delay_ms}ms, move={move_delay}ms -> {per_point}ms"
+            "Per point: integration=%dms x%d, delay=%dms, move=%dms -> %dms"
+            % (self.integration_time, self.scans_to_average, self.delay_ms, move_delay, per_point)
         )
-        self.log(
-            f"Row reset delay={row_delay}ms applied {count_x * count_z} times"
-        )
+        # with absolute moves there is no separate row reset delay
+
         self.log(f"Estimated total time {total_ms/1000:.2f} s")
 
         self.estimated_time_var.set(
@@ -999,7 +1033,6 @@ class MyGUI:
         end_y = self.user_positions['4']['Y'] if self.user_positions['4'] else start_y
         end_z = self.user_positions['5']['Z'] if self.user_positions['5'] else start_z
 
-
         step_x = (end_x - start_x) / (self.samples_count_x - 1) if self.samples_count_x > 1 else 0
         step_y = (end_y - start_y) / (self.samples_count_y - 1) if self.samples_count_y > 1 else 0
         step_z = (end_z - start_z) / (self.samples_count_z - 1) if self.samples_count_z > 1 else 0
@@ -1011,14 +1044,20 @@ class MyGUI:
             f"Step sizes: step_x={step_x}, step_y={step_y}, step_z={step_z}"
         )
 
-
-        self.goto_position(1)
-        self.serial.send_gcode('G92 X0 Y0 Z0')
+        # ensure absolute coordinates and move to starting point
         self.serial.send_gcode('G90')
-        self.log(
-            f"Moving to start position X: {self.user_positions['1']['X']}, "
-            f"Y: {self.user_positions['1']['Y']}, Z: {self.user_positions['1']['Z']}"
+        start_cmd = (
+            f"G1 X{start_x} Y{start_y} Z{start_z} F{self.get_speed()}"
         )
+        self.serial.send_gcode(start_cmd)
+
+        self.log(
+            f"Moving to start position X: {start_x}, Y: {start_y}, Z: {start_z}"
+        )
+        self.waitForCNC()
+        self.current_position = {'X': start_x, 'Y': start_y, 'Z': start_z}
+        self.update_map_position(start_x, start_y, start_z)
+
 
         total_points = self.samples_count_x * self.samples_count_y * self.samples_count_z
         self.log(f"Total scan points: {total_points}")
@@ -1033,33 +1072,33 @@ class MyGUI:
 
         while self.running:
             for k in range(self.samples_count_z):
-                rel_z = k * step_z
-                abs_z = start_z + rel_z
+                abs_z = start_z + k * step_z
                 self.log(f"Z layer {k+1}/{self.samples_count_z} at Z={abs_z}")
                 for i in range(self.samples_count_x):
-                    rel_x = i * step_x
-                    abs_x = start_x + rel_x
+                    abs_x = start_x + i * step_x
                     self.log(f"  X step {i+1}/{self.samples_count_x} at X={abs_x}")
 
-                    isChangedX = True
                     for j in range(self.samples_count_y):
                         if not self.running:
                             break
                         while self.paused and self.running:
                             time.sleep(0.1)
-                        rel_y = j * step_y
-                        abs_y = start_y + rel_y
+                        abs_y = start_y + j * step_y
                         self.log(f"    Y step {j+1}/{self.samples_count_y} at Y={abs_y}")
-                        move_command = f'G1 X{ rel_x } Y{ rel_y } Z{ rel_z } F{self.get_speed()}'
-
+                        move_command = (
+                            f"G1 X{abs_x} Y{abs_y} Z{abs_z} F{self.get_speed()}"
+                        )
                         self.serial.send_gcode(move_command)
-                        self.log(f"Moving to position X: {abs_x}, Y: {abs_y}, Z: {abs_z}")
+                        self.log(
+                            f"Moving to position X: {abs_x}, Y: {abs_y}, Z: {abs_z}"
+                        )
+
                         self.waitForCNC()
-                        max_step = max(step_x, step_y, step_z)
+                        dx = abs(abs_x - self.current_position['X'])
+                        dy = abs(abs_y - self.current_position['Y'])
+                        dz = abs(abs_z - self.current_position['Z'])
+                        max_step = max(dx, dy, dz)
                         self.measureDelayFromSteps(max_step)
-                        if isChangedX:
-                            self.measureDelayFromSteps(step_x * self.samples_count_x)
-                            isChangedX = False
                         current_measure += 1
                         self.current_position = {'X': abs_x, 'Y': abs_y, 'Z': abs_z}
                         self.update_map_position(abs_x, abs_y, abs_z)
@@ -1077,8 +1116,6 @@ class MyGUI:
                         self.log("Stopped.")
                         break
 
-                if not self.running:
-                    break
 
             self.serial.send_gcode('G91')
             self.running = False
