@@ -16,7 +16,7 @@ from wasatch.WasatchDeviceWrapper import WasatchDeviceWrapper
 from wasatch.RealUSBDevice        import RealUSBDevice
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
-import tkinter as tk
+
 import logging
 
 log = logging.getLogger(__name__)
@@ -50,6 +50,7 @@ class Wasatch:
         self.position = (None, None, None)
         self.bounds = None
         self.reading_count = 0
+
 
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
@@ -156,6 +157,7 @@ class Wasatch:
         self.init_file()
         return device
 
+
     def run(self, label):
         if self.device is None:
             print("Not connected to spectrometer")
@@ -232,6 +234,7 @@ class Wasatch:
             size_in_bytes))
         print(str(reading))
 
+
         if self.outfile:
             x, y, z = self.position
             self.outfile.write("%s;%s;%s;%s;%.2f;%s\n" % (
@@ -241,6 +244,7 @@ class Wasatch:
                 format(z, ".2f") if z is not None else "",
                 reading.detector_temperature_degC,
                 ";".join(format(x, ".2f") for x in spectrum)))
+
 
         if None not in self.position:
             self.points.append(self.position)
@@ -274,6 +278,7 @@ class Wasatch:
                 print(f"Error closing previous outfile: {e}")
         self.outfile = None
         print(f'Filepath set to: {self.args.outfile}')
+
 
 
     def set_integration_time(self, integration_time_ms):
@@ -312,6 +317,7 @@ class Wasatch:
         except Exception as e:
             print(f"Error initializing {self.args.outfile}: {e}")
             self.outfile = None
+
 
     def close_file(self):
         if self.args.outfile:
