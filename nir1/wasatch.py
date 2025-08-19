@@ -49,6 +49,8 @@ class Wasatch:
         self.position = (None, None, None)
         self.bounds = None
         self.reading_count = 0
+        self.points_zoomed = False
+
 
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
@@ -59,6 +61,7 @@ class Wasatch:
         self.bounds = (x1, x2, y1, y2, z1, z2)
         self.scan_points = points
         self.predicted_points = []
+        self.points_zoomed = False
         try:
             step_x = (x2 - x1) / (count_x - 1) if count_x > 1 else 0
             step_y = (y2 - y1) / (count_y - 1) if count_y > 1 else 0
@@ -357,9 +360,10 @@ class Wasatch:
                     [corners[e[0]][2], corners[e[1]][2]],
                     color='black'
                 )
-            self.points_ax.set_xlim(min(xs), max(xs))
-            self.points_ax.set_ylim(min(ys), max(ys))
-            self.points_ax.set_zlim(min(zs), max(zs))
+            if not self.points_zoomed:
+                self.points_ax.set_xlim(min(xs), max(xs))
+                self.points_ax.set_ylim(min(ys), max(ys))
+                self.points_ax.set_zlim(min(zs), max(zs))
             self.points_ax.invert_zaxis()
 
         if self.scan_points:
