@@ -31,6 +31,7 @@ class Wasatch:
         self.args = self.parse_args(argv)
         self.logger = applog.MainLogger(self.args.log_level)
         log.info(f"Wasatch.PY version {wasatch.__version__}")
+
         self.root = root
 
         # Figure for spectrum plot (embedded by GUI)
@@ -50,6 +51,7 @@ class Wasatch:
         self.bounds = None
         self.reading_count = 0
         self.points_zoomed = False
+
 
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
@@ -137,6 +139,7 @@ class Wasatch:
         self.bus.update()
         if not self.bus.device_ids:
             log.info("No Wasatch USB spectrometers found.")
+
             return None
 
         device_id = self.bus.device_ids[0]
@@ -158,6 +161,7 @@ class Wasatch:
                 device = OceanDevice(device_id)
 
         log.info("Connecting to %s", device_id)
+
         ok = device.connect()
         if not ok:
             log.critical("connect: can't connect to %s", device_id)
@@ -167,6 +171,7 @@ class Wasatch:
         self.reading_count = 0
         self.init_file()
         log.info("Spectrometer connected")
+
         return device
 
     def run(self, label):
@@ -187,6 +192,7 @@ class Wasatch:
         sleep_ms = self.args.delay_ms - reading_time_ms
         if sleep_ms > 0:
             log.debug(f"sleeping {sleep_ms} ms ({reading_time_ms} ms already passed)")
+
             try:
                 time.sleep(float(sleep_ms) / 1000)
             except Exception:
@@ -367,6 +373,7 @@ class Wasatch:
                 self.points_ax.set_ylim(min(ys), max(ys))
                 self.points_ax.set_zlim(min(zs), max(zs))
             self.points_ax.set_box_aspect([1, 1, 1])
+
             self.points_ax.invert_zaxis()
 
         if self.scan_points:
