@@ -52,9 +52,27 @@ class Wasatch:
         self.reading_count = 0
         self.points_zoomed = False
 
-
     def set_logger_handler(self, logger_handler):
-        self.logger.addHandler(logger_handler)
+        """Attach an additional handler to the Wasatch logger.
+
+        The underlying `applog.MainLogger` used by Wasatch.PY exposes its
+        root logger via the ``root`` attribute rather than implementing the
+        standard ``addHandler`` method.  Using ``root`` ensures compatibility
+        while still allowing external handlers (like the GUI log window) to
+        receive messages.  Fall back to the global logger if the expected
+        attribute is missing.
+        """
+
+        try:
+            # ``MainLogger`` provides access to the real ``logging.Logger`` via
+            # the ``root`` attribute.
+            self.logger.root.addHandler(logger_handler)
+        except AttributeError:
+            logging.getLogger().addHandler(logger_handler)
+
+        # Also attach to this module's logger so direct ``log`` calls propagate
+        # to the same handler.
+
         log.addHandler(logger_handler)
 
     def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None,
@@ -381,7 +399,9 @@ class Wasatch:
             for idx, key in enumerate(['1','2','3','4','5']):
                 pt = self.scan_points.get(key)
                 if pt:
-                    self.points_ax.scatter([pt['X']], [pt['Y']], [pt['Z']], color=colors[idx], marker='^', label=f'Point {key}')
+                    self.points_ax.scatter([pt['X']], [pt['Y']], [pt['Z']],
+                                          color=colors[idx], marker='^',
+                                          label=f'Point {key}')
 
         if self.predicted_points:
             xs, ys, zs = zip(*self.predicted_points)
@@ -398,7 +418,10 @@ class Wasatch:
         self.points_ax.set_ylabel('Y')
         self.points_ax.set_zlabel('Z')
         if self.scan_points:
-            self.points_ax.legend(loc='best')
+            handles, labels = self.points_ax.get_legend_handles_labels()
+            if handles:
+                self.points_ax.legend(loc='best')
+
         self.points_ax.set_box_aspect([1, 1, 1])
         self.points_canvas.draw()
 
