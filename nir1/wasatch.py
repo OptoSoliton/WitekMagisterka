@@ -51,6 +51,7 @@ class Wasatch:
         self.reading_count = 0
         self.points_zoomed = False
 
+
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
 
