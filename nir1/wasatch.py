@@ -14,7 +14,7 @@ from wasatch.OceanDevice          import OceanDevice
 from wasatch.WasatchDevice        import WasatchDevice
 from wasatch.WasatchDeviceWrapper import WasatchDeviceWrapper
 from wasatch.RealUSBDevice        import RealUSBDevice
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.figure import Figure
 
 import logging
@@ -124,6 +124,9 @@ class Wasatch:
         if self.bus is None:
             log.debug("instantiating WasatchBus")
             self.bus = WasatchBus(use_sim=False)
+
+        # refresh device list in case USB state changed
+        self.bus.update()
 
         if not self.bus.device_ids:
             print("No Wasatch USB spectrometers found.")
@@ -318,7 +321,6 @@ class Wasatch:
             print(f"Error initializing {self.args.outfile}: {e}")
             self.outfile = None
 
-
     def close_file(self):
         if self.args.outfile:
             self.outfile.close()
@@ -391,6 +393,9 @@ class Wasatch:
         self.points_canvas.draw()
         # use literal string to avoid depending on tkinter alias
         self.points_canvas.get_tk_widget().pack(fill="both", expand=False)
+        self.points_toolbar = NavigationToolbar2Tk(self.points_canvas, frame)
+        self.points_toolbar.update()
+
 
     def init_spectrum_plot(self, frame):
         if self.canvas:
@@ -399,6 +404,9 @@ class Wasatch:
         self.canvas.draw()
         # use literal string to avoid depending on tkinter alias
         self.canvas.get_tk_widget().pack(fill="both", expand=False)
+        self.toolbar = NavigationToolbar2Tk(self.canvas, frame)
+        self.toolbar.update()
+
 
 def signal_handler(signal, frame):
     print('\rInterrupted by Ctrl-C...shutting down', end=' ')
