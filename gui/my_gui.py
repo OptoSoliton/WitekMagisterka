@@ -34,7 +34,12 @@ class MyGUI:
         self.serial = serial_connection
         self.wasatch = wasatch
         self.root.title("CNC & Wasatch Controller")
-        self.root.geometry("1200x700")
+        self.root.geometry("1920x1080")
+        try:
+            self.root.state('zoomed')
+        except Exception:
+            pass
+
 
         # scrollable container so every widget is accessible even on small screens
         self.canvas = tk.Canvas(self.root)
@@ -88,10 +93,16 @@ class MyGUI:
 
         # Left and right part of window inside scrollable container
         self.left_frame = ttk.Frame(self.container)
-        self.left_frame.grid(row=0, column=0, sticky='n')
+        self.left_frame.grid(row=0, column=0, sticky='nw')
 
         self.right_frame = ttk.Frame(self.container)
-        self.right_frame.grid(row=0, column=1, sticky='n')
+        self.right_frame.grid(row=0, column=1, sticky='nw')
+
+        # split right side into controls and plots to avoid oversized grid rows
+        self.controls_frame = ttk.Frame(self.right_frame)
+        self.controls_frame.grid(row=0, column=0, sticky='nw')
+        self.plots_frame = ttk.Frame(self.right_frame)
+        self.plots_frame.grid(row=0, column=1, sticky='ne')
 
         # Serial connection frame
         self.serial_connection_frame = ttk.LabelFrame(self.left_frame, text="CNC serial connection", **FRAME_KWARGS)
@@ -227,16 +238,15 @@ class MyGUI:
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
         # Spectrometer connection frame
-        self.wasatch_connection_frame = ttk.LabelFrame(self.right_frame, text="Wasatch connection", **FRAME_KWARGS)
-        self.wasatch_connection_frame.grid(row=0, column=0, padx=PADX, pady=PADY, sticky="nw")
+        self.wasatch_connection_frame = ttk.LabelFrame(self.controls_frame, text="Wasatch connection", **FRAME_KWARGS)
+        self.wasatch_connection_frame.pack(fill='x', padx=PADX, pady=PADY)
 
         self.wasatch_connect_button = ttk.Button(self.wasatch_connection_frame, text="Connect spectrometer", command=self.connect_spectrometer)
-
         self.wasatch_connect_button.grid(row=0, column=0, padx=PADX, pady=PADY)
 
         # File path selection for saving spectra
-        self.file_path_frame = ttk.LabelFrame(self.right_frame, text="File path for spectra", **FRAME_KWARGS)
-        self.file_path_frame.grid(row=1, column=0, padx=PADX, pady=PADY, sticky="nw")
+        self.file_path_frame = ttk.LabelFrame(self.controls_frame, text="File path for spectra", **FRAME_KWARGS)
+        self.file_path_frame.pack(fill='x', padx=PADX, pady=PADY)
 
 
         self.file_path_label = ttk.Label(self.file_path_frame, text="File path:")
@@ -252,8 +262,9 @@ class MyGUI:
         self.ensure_file_path()
 
         # Wasatch parameters
-        self.wasatch_parameters_frame = ttk.LabelFrame(self.right_frame, text="Parameters", **FRAME_KWARGS)
-        self.wasatch_parameters_frame.grid(row=2, column=0, padx=PADX, pady=PADY, sticky="nw")
+        self.wasatch_parameters_frame = ttk.LabelFrame(self.controls_frame, text="Parameters", **FRAME_KWARGS)
+        self.wasatch_parameters_frame.pack(fill='x', padx=PADX, pady=PADY)
+
 
         # Integration time control
         self.integration_time_label = ttk.Label(self.wasatch_parameters_frame, text="Integration Time (ms):")
@@ -301,8 +312,9 @@ class MyGUI:
         self.set_max_spectra_button.grid(row=4, column=2, padx=PADX, pady=PADY)
 
         # Measuring frame
-        self.wasatch_measure_frame = ttk.LabelFrame(self.right_frame, text="Measuring", **FRAME_KWARGS)
-        self.wasatch_measure_frame.grid(row=3, column=0, padx=PADX, pady=PADY, sticky="nw")
+        self.wasatch_measure_frame = ttk.LabelFrame(self.controls_frame, text="Measuring", **FRAME_KWARGS)
+        self.wasatch_measure_frame.pack(fill='x', padx=PADX, pady=PADY)
+
 
         self.wasatch_samples_countX_label = ttk.Label(self.wasatch_measure_frame, text="Sample count X axis")
         self.wasatch_samples_countX_label.grid(row=0, column=1, padx=PADX, pady=PADY)
@@ -400,11 +412,15 @@ class MyGUI:
         ]
 
         # 3D head position preview
-        self.map_frame = ttk.LabelFrame(self.right_frame, text="Head position 3D", **FRAME_KWARGS)
-        self.map_frame.grid(row=0, column=1, padx=PADX, pady=PADY, sticky="ne")
+        self.map_frame = ttk.LabelFrame(self.plots_frame, text="Head position 3D", **FRAME_KWARGS)
+        self.map_frame.pack(padx=PADX, pady=PADY)
 
         self.map_fig = Figure(figsize=(2.5, 2.5), dpi=100)
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
+        try:
+            self.map_ax.set_proj_type('ortho')
+        except Exception:
+            pass
         self.map_canvas = FigureCanvasTkAgg(self.map_fig, master=self.map_frame)
         self.map_canvas.draw()
         self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
@@ -420,8 +436,8 @@ class MyGUI:
         self.point_labels = []
 
         # Points preview under head position
-        self.points_frame = ttk.LabelFrame(self.right_frame, text="Scan points", **FRAME_KWARGS)
-        self.points_frame.grid(row=1, column=1, padx=PADX, pady=PADY, sticky="ne")
+        self.points_frame = ttk.LabelFrame(self.plots_frame, text="Scan points", **FRAME_KWARGS)
+        self.points_frame.pack(padx=PADX, pady=PADY)
 
         self.wasatch.init_points_plot(self.points_frame)
         zoom_frame = ttk.Frame(self.points_frame)
@@ -430,8 +446,8 @@ class MyGUI:
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
 
         # Spectrum plot below scan points
-        self.spectrum_frame = ttk.LabelFrame(self.right_frame, text="Spectrum", **FRAME_KWARGS)
-        self.spectrum_frame.grid(row=2, column=1, padx=PADX, pady=PADY, sticky="ne")
+        self.spectrum_frame = ttk.LabelFrame(self.plots_frame, text="Spectrum", **FRAME_KWARGS)
+        self.spectrum_frame.pack(padx=PADX, pady=PADY)
 
         self.wasatch.init_spectrum_plot(self.spectrum_frame)
         zoom_frame = ttk.Frame(self.spectrum_frame)
