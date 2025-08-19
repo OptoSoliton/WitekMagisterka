@@ -42,6 +42,10 @@ class Wasatch:
         # Figure for measured and predicted points (embedded by GUI)
         self.points_fig = Figure(figsize=(2.5, 2.5), dpi=100)
         self.points_ax = self.points_fig.add_subplot(111, projection='3d')
+        try:
+            self.points_ax.set_proj_type('ortho')
+        except Exception:
+            pass
         self.points_canvas = None
 
         self.points = []
@@ -291,10 +295,15 @@ class Wasatch:
     ################################################################################
 
     def draw_graph(self, spectrum):
-        # Clear previous plot
-        self.ax.clear()
-        self.ax.plot(self.device.settings.wavelengths, spectrum)
-        self.canvas.draw()
+        if not self.canvas:
+            return
+
+        def _do():
+            self.ax.clear()
+            self.ax.plot(self.device.settings.wavelengths, spectrum)
+            self.canvas.draw()
+
+        self.canvas.get_tk_widget().after(0, _do)
 
     def set_output_file_path(self, outfile_path):
         base, ext = os.path.splitext(outfile_path)
@@ -366,64 +375,67 @@ class Wasatch:
     def update_points_plot(self):
         if not self.points_canvas:
             return
-        self.points_ax.clear()
-        if self.bounds:
-            import itertools
-            x1, x2, y1, y2, z1, z2 = self.bounds
-            xs = [x1, x2]
-            ys = [y1, y2]
-            zs = [z1, z2]
-            corners = list(itertools.product(xs, ys, zs))
-            edges = [
-                (0,1),(0,2),(2,3),(1,3),
-                (4,5),(4,6),(6,7),(5,7),
-                (0,4),(1,5),(2,6),(3,7)
-            ]
-            for e in edges:
-                self.points_ax.plot(
-                    [corners[e[0]][0], corners[e[1]][0]],
-                    [corners[e[0]][1], corners[e[1]][1]],
-                    [corners[e[0]][2], corners[e[1]][2]],
-                    color='black'
-                )
-            if not self.points_zoomed:
-                self.points_ax.set_xlim(min(xs), max(xs))
-                self.points_ax.set_ylim(min(ys), max(ys))
-                self.points_ax.set_zlim(min(zs), max(zs))
+
+        def _do():
+            self.points_ax.clear()
+            if self.bounds:
+                import itertools
+                x1, x2, y1, y2, z1, z2 = self.bounds
+                xs = [x1, x2]
+                ys = [y1, y2]
+                zs = [z1, z2]
+                corners = list(itertools.product(xs, ys, zs))
+                edges = [
+                    (0,1),(0,2),(2,3),(1,3),
+                    (4,5),(4,6),(6,7),(5,7),
+                    (0,4),(1,5),(2,6),(3,7)
+                ]
+                for e in edges:
+                    self.points_ax.plot(
+                        [corners[e[0]][0], corners[e[1]][0]],
+                        [corners[e[0]][1], corners[e[1]][1]],
+                        [corners[e[0]][2], corners[e[1]][2]],
+                        color='black'
+                    )
+                if not self.points_zoomed:
+                    self.points_ax.set_xlim(min(xs), max(xs))
+                    self.points_ax.set_ylim(min(ys), max(ys))
+                    self.points_ax.set_zlim(min(zs), max(zs))
+                self.points_ax.set_box_aspect([1, 1, 1])
+                self.points_ax.invert_zaxis()
+
+            if self.scan_points:
+                colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
+                for idx, key in enumerate(['1','2','3','4','5']):
+                    pt = self.scan_points.get(key)
+                    if pt:
+                        self.points_ax.scatter([pt['X']], [pt['Y']], [pt['Z']],
+                                              color=colors[idx], marker='^',
+                                              label=f'Point {key}')
+
+            if self.predicted_points:
+                xs, ys, zs = zip(*self.predicted_points)
+                self.points_ax.scatter(xs, ys, zs, c='gray', alpha=0.3, s=10)
+
+            if self.points:
+                xs, ys, zs = zip(*self.points)
+                self.points_ax.scatter(xs, ys, zs, c='red', marker='o', s=20)
+
+            if None not in self.position:
+                self.points_ax.scatter([self.position[0]], [self.position[1]], [self.position[2]], c='red', s=80, alpha=0.6)
+
+            self.points_ax.set_xlabel('X')
+            self.points_ax.set_ylabel('Y')
+            self.points_ax.set_zlabel('Z')
+            if self.scan_points:
+                handles, labels = self.points_ax.get_legend_handles_labels()
+                if handles:
+                    self.points_ax.legend(loc='best')
             self.points_ax.set_box_aspect([1, 1, 1])
+            self.points_canvas.draw()
 
-            self.points_ax.invert_zaxis()
+        self.points_canvas.get_tk_widget().after(0, _do)
 
-        if self.scan_points:
-            colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
-            for idx, key in enumerate(['1','2','3','4','5']):
-                pt = self.scan_points.get(key)
-                if pt:
-                    self.points_ax.scatter([pt['X']], [pt['Y']], [pt['Z']],
-                                          color=colors[idx], marker='^',
-                                          label=f'Point {key}')
-
-        if self.predicted_points:
-            xs, ys, zs = zip(*self.predicted_points)
-            self.points_ax.scatter(xs, ys, zs, c='gray', alpha=0.3, s=10)
-
-        if self.points:
-            xs, ys, zs = zip(*self.points)
-            self.points_ax.scatter(xs, ys, zs, c='red', marker='o', s=20)
-
-        if None not in self.position:
-            self.points_ax.scatter([self.position[0]], [self.position[1]], [self.position[2]], c='red', s=80, alpha=0.6)
-
-        self.points_ax.set_xlabel('X')
-        self.points_ax.set_ylabel('Y')
-        self.points_ax.set_zlabel('Z')
-        if self.scan_points:
-            handles, labels = self.points_ax.get_legend_handles_labels()
-            if handles:
-                self.points_ax.legend(loc='best')
-
-        self.points_ax.set_box_aspect([1, 1, 1])
-        self.points_canvas.draw()
 
     def init_points_plot(self, frame):
         self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=frame)
