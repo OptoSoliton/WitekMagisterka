@@ -257,6 +257,7 @@ class MyGUI:
         self.delay_ms_entry.insert(tk.END, str(self.delay_ms))
         ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_delay_ms).grid(row=5, column=2, padx=PADX, pady=PADY)
 
+
         self.max_spectra_label = ttk.Label(self.wasatch_parameters_frame, text="Max Spectra:")
         self.max_spectra_label.grid(row=6, column=0, padx=PADX, pady=PADY)
         self.max_spectra_entry = ttk.Entry(self.wasatch_parameters_frame)
@@ -580,6 +581,7 @@ class MyGUI:
             self.wasatch.update_points_plot()
 
         self.root.after(0, _do)
+
 
     def update_volume_display(self):
         import itertools
