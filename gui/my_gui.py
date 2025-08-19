@@ -34,7 +34,9 @@ class MyGUI:
         self.serial = serial_connection
         self.wasatch = wasatch
         self.root.title("CNC & Wasatch Controller")
+
         self.root.geometry("1920x1080")
+
         try:
             self.root.state('zoomed')
         except Exception:
@@ -315,7 +317,6 @@ class MyGUI:
         self.wasatch_measure_frame = ttk.LabelFrame(self.controls_frame, text="Measuring", **FRAME_KWARGS)
         self.wasatch_measure_frame.pack(fill='x', padx=PADX, pady=PADY)
 
-
         self.wasatch_samples_countX_label = ttk.Label(self.wasatch_measure_frame, text="Sample count X axis")
         self.wasatch_samples_countX_label.grid(row=0, column=1, padx=PADX, pady=PADY)
         self.wasatch_samples_countX_entry = ttk.Entry(self.wasatch_measure_frame)
@@ -390,6 +391,13 @@ class MyGUI:
         )
         self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
 
+        self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
+        self.estimated_time_label = ttk.Label(
+            self.wasatch_measure_frame, textvariable=self.estimated_time_var
+        )
+        self.estimated_time_label.grid(row=8, column=0, columnspan=4, padx=PADX, pady=PADY)
+
+
         # list of widgets disabled during a long scan
         self.disable_on_run = [
             self.connect_button,
@@ -448,10 +456,12 @@ class MyGUI:
         # Spectrum plot below scan points
         self.spectrum_frame = ttk.LabelFrame(self.plots_frame, text="Spectrum", **FRAME_KWARGS)
         self.spectrum_frame.pack(padx=PADX, pady=PADY)
-
         self.wasatch.init_spectrum_plot(self.spectrum_frame)
         zoom_frame = ttk.Frame(self.spectrum_frame)
         zoom_frame.pack()
+        ttk.Button(zoom_frame, text="◀", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1)).pack(side="left")
+        ttk.Button(zoom_frame, text="▶", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1)).pack(side="left")
+
         ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8)).pack(side="left")
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25)).pack(side="left")
 
@@ -519,15 +529,25 @@ class MyGUI:
             yspan = (ylim[1] - ylim[0]) * factor / 2
             ax.set_xlim(xmid - xspan, xmid + xspan)
             ax.set_ylim(ymid - yspan, ymid + yspan)
-        canvas.draw()
+        canvas.draw_idle()
+
         if ax is self.map_ax:
             self.map_zoomed = True
         elif ax is self.wasatch.points_ax:
             self.wasatch.points_zoomed = True
 
+    def pan_axes(self, ax, canvas, frac):
+        xlim = ax.get_xlim()
+        shift = (xlim[1] - xlim[0]) * frac
+        ax.set_xlim(xlim[0] + shift, xlim[1] + shift)
+        canvas.draw_idle()
+
+
     def set_integration_time(self):
         integration_time = int(self.integration_time_entry.get())
+        self.integration_time = integration_time
         self.wasatch.set_integration_time(integration_time)
+        self.update_time_estimate()
 
     def set_scans_to_average(self):
         scans_to_average = int(self.scans_to_average_entry.get())
@@ -539,7 +559,9 @@ class MyGUI:
 
     def set_delay_ms(self):
         delay_ms = int(self.delay_ms_entry.get())
+        self.delay_ms = delay_ms
         self.wasatch.set_delay_ms(delay_ms)
+        self.update_time_estimate()
 
     def set_max_spectra(self):
         max_spectra = int(self.max_spectra_entry.get())
@@ -581,6 +603,7 @@ class MyGUI:
             self.wasatch.scan_points = self.user_positions
             self.wasatch.points_zoomed = False
             self.wasatch.update_points_plot()
+            self.estimated_time_var.set("Estimated time: n/a")
             return
 
         xs = [p['X'] for p in defined]
@@ -602,9 +625,58 @@ class MyGUI:
                 count_z,
             )
             self.log("Points ready")
+            self.update_time_estimate()
         except Exception:
             self.wasatch.scan_points = self.user_positions
             self.wasatch.update_points_plot()
+
+    def update_time_estimate(self):
+        try:
+            count_x = int(self.wasatch_samples_countX_entry.get())
+            count_y = int(self.wasatch_samples_countY_entry.get())
+            count_z = int(self.wasatch_samples_countZ_entry.get())
+        except ValueError:
+            self.estimated_time_var.set("Estimated time: n/a")
+            return
+
+        if not self.user_positions.get('1') or not self.user_positions.get('2'):
+            self.estimated_time_var.set("Estimated time: n/a")
+            return
+
+        start_x = self.user_positions['1']['X']
+        start_y = self.user_positions['1']['Y']
+        start_z = self.user_positions['1']['Z']
+        end_x = self.user_positions['2']['X']
+        end_y = self.user_positions['4']['Y'] if self.user_positions['4'] else start_y
+        end_z = self.user_positions['5']['Z'] if self.user_positions['5'] else start_z
+
+        step_x = (end_x - start_x) / (count_x - 1) if count_x > 1 else 0
+        step_y = (end_y - start_y) / (count_y - 1) if count_y > 1 else 0
+        step_z = (end_z - start_z) / (count_z - 1) if count_z > 1 else 0
+
+        self.log(
+            f"Estimating time with counts X={count_x}, Y={count_y}, Z={count_z}"
+        )
+        self.log(
+            f"Step sizes for estimate: step_x={step_x}, step_y={step_y}, step_z={step_z}"
+        )
+
+        measure_count = max(count_x * count_y * count_z, 1)
+        move_delay = self.interpolate_time(max(step_x, step_y, step_z))
+        row_delay = self.interpolate_time(step_x * count_x) if step_x else 0
+        per_point = self.integration_time + self.delay_ms + move_delay
+        total_ms = measure_count * per_point + (count_x * count_z) * row_delay
+        self.log(
+            f"Per point: integration={self.integration_time}ms, delay={self.delay_ms}ms, move={move_delay}ms -> {per_point}ms"
+        )
+        self.log(
+            f"Row reset delay={row_delay}ms applied {count_x * count_z} times"
+        )
+        self.log(f"Estimated total time {total_ms/1000:.2f} s")
+
+        self.estimated_time_var.set(
+            f"Estimated time: {total_ms/1000:.1f} s"
+        )
 
     def connect_spectrometer(self):
         self.log("Connecting spectrometer...")
@@ -872,9 +944,12 @@ class MyGUI:
                 self.log('CNC not connected')
                 return
             self.ensure_file_path()
+            self.update_time_estimate()
             self.running = True
             self.disable_controls()
             self.log("Starting run-area measurement")
+            self.log(self.estimated_time_var.get())
+
             # New thread for measuring
             if not self.measure_thread or not self.measure_thread.is_alive():
                 self.measure_thread = threading.Thread(target=self.measure_and_move)
@@ -936,6 +1011,7 @@ class MyGUI:
             f"Step sizes: step_x={step_x}, step_y={step_y}, step_z={step_z}"
         )
 
+
         self.goto_position(1)
         self.serial.send_gcode('G92 X0 Y0 Z0')
         self.serial.send_gcode('G90')
@@ -945,22 +1021,9 @@ class MyGUI:
         )
 
         total_points = self.samples_count_x * self.samples_count_y * self.samples_count_z
-        self.log(f"Generating {total_points} scan points")
-        self.wasatch.set_scan_bounds(
-            start_x, end_x,
-            start_y, end_y,
-            start_z,
-            end_z,
-
-            self.user_positions,
-            self.samples_count_x,
-            self.samples_count_y,
-            self.samples_count_z,
-            progress_cb=self.update_progress,
-            log_cb=self.log,
-        )
-        self.log("Points ready")
-        self.update_progress(0)
+        self.log(f"Total scan points: {total_points}")
+        self.wasatch.points = []
+        self.wasatch.update_points_plot()
 
         current_measure = 0
         measure_count = total_points
