@@ -35,7 +35,19 @@ class MyGUI:
         # Actual XYZ position
         self.current_position = {'X': 0, 'Y': 0, 'Z': 0}
         # Positions 1-5 used to define scan volume
-@@ -47,387 +51,439 @@ class MyGUI:
+        # 1 - origin, 2 - X extent, 4 - Y extent, 5 - Z extent, 3 optional
+        self.user_positions = {
+            '1': None,
+            '2': None,
+            '3': None,
+            '4': None,
+            '5': None,
+        }
+        self.dark_taken = False
+
+        self.integration_time = 10
+        self.scans_to_average = 1
+        self.boxcar_half_width = 0
         self.delay_ms = 1000
         self.max_spectra = 0
 
@@ -475,7 +487,7 @@ class MyGUI:
         file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv"), ("All files", "*.*")])
         if file_path:
             self.file_path_entry.delete(0, tk.END)
-@@ -435,150 +491,154 @@ class MyGUI:
+            self.file_path_entry.insert(0, file_path)
             self.wasatch.set_output_file_path(file_path)
 
     def ensure_file_path(self):
@@ -630,7 +642,112 @@ class MyGUI:
                 zs.append(pt['Z'])
                 dot = self.map_ax.scatter([pt['X']], [pt['Y']], [pt['Z']], color=colors[idx], marker='o')
                 self.map_ax.text(pt['X'], pt['Y'], pt['Z'], f"{key}")
-@@ -691,184 +751,194 @@ class MyGUI:
+                self.point_dots.append(dot)
+
+        # draw volume if all bounding points are set
+        if all(self.user_positions.get(k) for k in ['1','2','4','5']):
+            x1 = self.user_positions['1']['X']
+            x2 = self.user_positions['2']['X']
+            y1 = self.user_positions['1']['Y']
+            y2 = self.user_positions['4']['Y']
+            z1 = self.user_positions['1']['Z']
+            z2 = self.user_positions['5']['Z']
+            xs.extend([x1, x2])
+            ys.extend([y1, y2])
+            zs.extend([z1, z2])
+            corners = list(itertools.product([x1, x2], [y1, y2], [z1, z2]))
+            edges = [
+                (0,1),(0,2),(2,3),(1,3),
+                (4,5),(4,6),(6,7),(5,7),
+                (0,4),(1,5),(2,6),(3,7)
+            ]
+            for e in edges:
+                line = self.map_ax.plot(
+                    [corners[e[0]][0], corners[e[1]][0]],
+                    [corners[e[0]][1], corners[e[1]][1]],
+                    [corners[e[0]][2], corners[e[1]][2]],
+                    color='black'
+                )[0]
+                self.volume_lines.append(line)
+
+        if xs and ys and zs:
+            self.map_ax.set_xlim(min(xs), max(xs))
+            self.map_ax.set_ylim(min(ys), max(ys))
+            self.map_ax.set_zlim(min(zs), max(zs))
+        self.map_ax.invert_zaxis()
+        self.map_ax.set_xlabel('X')
+        self.map_ax.set_ylabel('Y')
+        self.map_ax.set_zlabel('Z')
+
+
+    def set_position(self, position_number):
+        self.user_positions[str(position_number)] = self.current_position.copy()
+        self.log(
+            f"Position {position_number} set to X:{self.current_position['X']}, Y:{self.current_position['Y']}, Z:{self.current_position['Z']}."
+        )
+        self.update_map_position(
+            self.current_position['X'],
+            self.current_position['Y'],
+            self.current_position['Z']
+        )
+        self.calculate_predicted_points()
+
+    def goto_position(self, position_number):
+        pos = self.user_positions.get(str(position_number))
+        if not pos:
+            self.log(f"Position {position_number} not set")
+            return
+        # move relative to current position to avoid running beyond limits
+        delta_x = pos['X'] - self.current_position['X']
+        delta_y = pos['Y'] - self.current_position['Y']
+        delta_z = pos['Z'] - self.current_position['Z']
+
+        self.serial.send_gcode('G91')
+        cmd = (
+            f"G1 X{ -delta_x } Y{ -delta_y } Z{ delta_z } F{self.get_speed()}"
+        )
+        self.serial.send_gcode(cmd)
+        self.waitForCNC()
+        self.current_position = pos.copy()
+        self.update_map_position(pos['X'], pos['Y'], pos['Z'])
+        self.log(f"Moved to position {position_number}")
+
+    def test_positions(self):
+        """Move along all edges of the defined volume."""
+        try:
+            import itertools
+            x1 = self.user_positions['1']['X']
+            x2 = self.user_positions['2']['X']
+            y1 = self.user_positions['1']['Y']
+            y2 = self.user_positions['4']['Y']
+            z1 = self.user_positions['1']['Z']
+            z2 = self.user_positions['5']['Z']
+        except Exception:
+            self.log('Set positions 1,2,4 and 5 first')
+            return
+
+        xs = [x1, x2]
+        ys = [y1, y2]
+        zs = [z1, z2]
+        corners = list(itertools.product(xs, ys, zs))
+        edges = [
+            (0,1),(0,2),(2,3),(1,3),
+            (4,5),(4,6),(6,7),(5,7),
+            (0,4),(1,5),(2,6),(3,7)
+        ]
+
+        self.serial.send_gcode('G90')
+        for e in edges:
+            target = corners[e[1]]
+            cmd = (
+                f"G1 X{ -target[0] } Y{ -target[1] } Z{ target[2] } F{self.get_speed()}"
+            )
+            self.serial.send_gcode(cmd)
+            self.log(f"Moving to {target}")
+            self.waitForCNC()
+            self.update_map_position(target[0], target[1], target[2])
+        self.serial.send_gcode('G91')
+
     def set_position_zero(self):
         self.current_position = {'X': 0, 'Y': 0, 'Z': 0}
         self.serial.send_gcode('G92 X0 Y0 Z0')
@@ -671,6 +788,7 @@ class MyGUI:
             self.ensure_file_path()
             self.running = True
             self.disable_controls()
+            self.log("Starting run-area measurement")
             # New thread for measuring
             if not self.measure_thread or not self.measure_thread.is_alive():
                 self.measure_thread = threading.Thread(target=self.measure_and_move)
@@ -716,6 +834,13 @@ class MyGUI:
         step_y = (y2 - y1) / (self.samples_count_y - 1) if self.samples_count_y > 1 else 0
         step_z = (z2 - z1) / (self.samples_count_z - 1) if self.samples_count_z > 1 else 0
 
+        self.log(
+            f"Bounds: x1={x1}, x2={x2}, y1={y1}, y2={y2}, z1={z1}, z2={z2}"
+        )
+        self.log(
+            f"Step sizes: step_x={step_x}, step_y={step_y}, step_z={step_z}"
+        )
+
         # Turn cnc into start point (0,0)
         self.serial.send_gcode('G90')
         move_command = (
@@ -751,6 +876,7 @@ class MyGUI:
         measure_count = total_points
 
         self.wasatch.init_file()
+        self.log(f"Output file: {self.wasatch.args.outfile}")
 
         while self.running:
             for k in range(self.samples_count_z):
@@ -798,11 +924,13 @@ class MyGUI:
             self.running = False
 
     def waitForCNC(self):
+        self.log("Waiting for CNC to finish move")
         while not self.serial.wait_for_ending_move():
             time.sleep(0.01)
 
     def measureDelayFromSteps(self, step):
         wait_time_ms = self.interpolate_time(step) + 100
+        self.log(f"Delaying {wait_time_ms} ms for step {step}")
         time.sleep(wait_time_ms/1000)
 
     def interpolate_time(self, step):
@@ -824,4 +952,44 @@ class MyGUI:
             self.current_position['Z'],
         )
         finished = self.wasatch.run_with_position("dark", *pos)
-        if finished is False
+        if finished is False:
+            self.running = False
+            self.log("Stopped. Measure from wasatch.py return False.")
+            return
+        self.dark_taken = True
+        self.continue_button.config(state=tk.NORMAL)
+
+    def run_light(self):
+        self.ensure_file_path()
+        if self.wasatch.outfile is None or self.wasatch.outfile.closed:
+            self.wasatch.init_file()
+        self.log(f"Light measure")
+        pos = (
+            self.current_position['X'],
+            self.current_position['Y'],
+            self.current_position['Z'],
+        )
+        finished = self.wasatch.run_with_position("light", *pos)
+        if finished is False:
+            self.running = False
+            self.log("Stopped. Measure from wasatch.py return False.")
+            return
+
+    def pause_for_reference(self):
+        if not self.running:
+            self.log("Nothing to pause")
+            return
+        self.paused = True
+        self.dark_taken = False
+        self.continue_button.config(state=tk.DISABLED)
+        self.log("Paused. Take dark reference and optionally light, then press Continue")
+
+    def continue_measurement(self):
+        if not self.paused:
+            return
+        if not self.dark_taken:
+            self.log("Take dark reference before continuing")
+            return
+        self.paused = False
+        self.continue_button.config(state=tk.DISABLED)
+        self.log("Resuming measurement")

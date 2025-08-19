@@ -66,6 +66,8 @@ class WasatchDemo:
     ############################################################################
 
     def parse_args(self, argv):
+        if argv is None:
+            argv = sys.argv
         parser = argparse.ArgumentParser(description="Simple demo to acquire spectra from command-line interface")
         parser.add_argument("--log-level",           type=str, default="INFO", help="logging level [DEBUG,INFO,WARNING,ERROR,CRITICAL]")
         parser.add_argument("--integration-time-ms", type=int, default=10,     help="integration time (ms, default 10)")
@@ -297,3 +299,4 @@ if __name__ == "__main__":
         demo.run()
 
     clean_shutdown()
+
