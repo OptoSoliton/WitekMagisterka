@@ -3,6 +3,7 @@ from tkinter import ttk, scrolledtext, filedialog
 import time
 import threading
 import numpy as np
+import logging
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure  # required for embedded plots
 
@@ -10,6 +11,21 @@ from matplotlib.figure import Figure  # required for embedded plots
 PADX = 3
 PADY = 2
 FRAME_KWARGS = dict(padding=(PADX, PADY))
+
+
+class TkLogHandler(logging.Handler):
+    """Forward logging records to the GUI log window."""
+
+    def __init__(self, gui):
+        super().__init__()
+        self.gui = gui
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self.gui.log(msg)
+        except Exception:
+            pass
 
 
 class MyGUI:
@@ -61,6 +77,9 @@ class MyGUI:
         self.map_zoomed = False
 
         self.setup_ui()
+        # forward Wasatch logger messages to GUI log
+        handler = TkLogHandler(self)
+        self.wasatch.set_logger_handler(handler)
         self.running = False
         self.paused = False
         self.measure_thread = threading.Thread()
@@ -145,40 +164,46 @@ class MyGUI:
         self.position_frame.grid(row=3, column=0, padx=PADX, pady=PADY, sticky="nw")
 
 
-        # Position buttons
+        # Position buttons arranged as 1 3 / 2 4 with 5 on the right
         self.set_button_1 = ttk.Button(self.position_frame, text="Set 1", command=lambda: self.set_position(1))
         self.set_button_1.grid(row=0, column=0, padx=PADX, pady=PADY)
 
-        self.set_button_2 = ttk.Button(self.position_frame, text="Set 2", command=lambda: self.set_position(2))
-        self.set_button_2.grid(row=0, column=1, padx=PADX, pady=PADY)
-
         self.set_button_3 = ttk.Button(self.position_frame, text="Set 3", command=lambda: self.set_position(3))
-        self.set_button_3.grid(row=1, column=1, padx=PADX, pady=PADY)
+        self.set_button_3.grid(row=0, column=1, padx=PADX, pady=PADY)
+
+        self.set_button_2 = ttk.Button(self.position_frame, text="Set 2", command=lambda: self.set_position(2))
+        self.set_button_2.grid(row=1, column=0, padx=PADX, pady=PADY)
 
         self.set_button_4 = ttk.Button(self.position_frame, text="Set 4", command=lambda: self.set_position(4))
-        self.set_button_4.grid(row=1, column=0, padx=PADX, pady=PADY)
+        self.set_button_4.grid(row=1, column=1, padx=PADX, pady=PADY)
 
-        self.set_button_5 = ttk.Button(self.position_frame, text="Set 5", command=lambda: self.set_position(5))
-        self.set_button_5.grid(row=2, column=0, padx=PADX, pady=PADY)
+        self.set_button_5 = ttk.Button(
+            self.position_frame,
+            text="Set 5 (set high point)",
+            command=lambda: self.set_position(5),
+        )
+        self.set_button_5.grid(row=0, column=2, rowspan=2, padx=(PADX*3, PADX), pady=PADY)
 
-        # goto buttons
+
+        # goto buttons aligned with the set buttons
         self.goto_button_1 = ttk.Button(self.position_frame, text="Go to 1", command=lambda: self.goto_position(1))
         self.goto_button_1.grid(row=0, column=3, padx=PADX, pady=PADY)
-        self.goto_button_2 = ttk.Button(self.position_frame, text="Go to 2", command=lambda: self.goto_position(2))
-        self.goto_button_2.grid(row=0, column=4, padx=PADX, pady=PADY)
         self.goto_button_3 = ttk.Button(self.position_frame, text="Go to 3", command=lambda: self.goto_position(3))
-        self.goto_button_3.grid(row=1, column=4, padx=PADX, pady=PADY)
+        self.goto_button_3.grid(row=0, column=4, padx=PADX, pady=PADY)
+        self.goto_button_2 = ttk.Button(self.position_frame, text="Go to 2", command=lambda: self.goto_position(2))
+        self.goto_button_2.grid(row=1, column=3, padx=PADX, pady=PADY)
         self.goto_button_4 = ttk.Button(self.position_frame, text="Go to 4", command=lambda: self.goto_position(4))
-        self.goto_button_4.grid(row=1, column=3, padx=PADX, pady=PADY)
+        self.goto_button_4.grid(row=1, column=4, padx=PADX, pady=PADY)
         self.goto_button_5 = ttk.Button(self.position_frame, text="Go to 5", command=lambda: self.goto_position(5))
-        self.goto_button_5.grid(row=2, column=3, padx=PADX, pady=PADY)
+        self.goto_button_5.grid(row=0, column=5, rowspan=2, padx=PADX, pady=PADY)
 
         self.test_button = ttk.Button(self.position_frame, text="Test", command=self.test_positions)
-        self.test_button.grid(row=2, column=2, padx=PADX, pady=PADY)
+        self.test_button.grid(row=2, column=3, padx=PADX, pady=PADY)
 
         # Adding "Init" Button to send initialization commands
         self.init_button = ttk.Button(self.position_frame, text="Goto 0.0", command=self.move_to_zero)
-        self.init_button.grid(row=0, column=2,  padx=PADX, pady=PADY)
+        self.init_button.grid(row=2, column=4,  padx=PADX, pady=PADY)
+
         
         # Manual command frame
         self.manual_command_frame = ttk.LabelFrame(self.left_frame, text="Manual command", **FRAME_KWARGS)
@@ -198,21 +223,20 @@ class MyGUI:
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
         self.log_frame.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="nw")
 
-
         self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=8, width=50)
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
         # Spectrometer connection frame
         self.wasatch_connection_frame = ttk.LabelFrame(self.right_frame, text="Wasatch connection", **FRAME_KWARGS)
-        self.wasatch_connection_frame.grid(row=0, column=1, padx=PADX, pady=PADY, sticky="nw")
+        self.wasatch_connection_frame.grid(row=0, column=0, padx=PADX, pady=PADY, sticky="nw")
 
+        self.wasatch_connect_button = ttk.Button(self.wasatch_connection_frame, text="Connect spectrometer", command=self.connect_spectrometer)
 
-        self.wasatch_connect_button = ttk.Button(self.wasatch_connection_frame, text = "Connect spectrometer", command=self.wasatch.connect)
         self.wasatch_connect_button.grid(row=0, column=0, padx=PADX, pady=PADY)
 
         # File path selection for saving spectra
         self.file_path_frame = ttk.LabelFrame(self.right_frame, text="File path for spectra", **FRAME_KWARGS)
-        self.file_path_frame.grid(row=1, column=1, padx=PADX, pady=PADY, sticky="nw")
+        self.file_path_frame.grid(row=1, column=0, padx=PADX, pady=PADY, sticky="nw")
 
 
         self.file_path_label = ttk.Label(self.file_path_frame, text="File path:")
@@ -229,58 +253,56 @@ class MyGUI:
 
         # Wasatch parameters
         self.wasatch_parameters_frame = ttk.LabelFrame(self.right_frame, text="Parameters", **FRAME_KWARGS)
-        self.wasatch_parameters_frame.grid(row=2, column=1, padx=PADX, pady=PADY, sticky="nw")
-
+        self.wasatch_parameters_frame.grid(row=2, column=0, padx=PADX, pady=PADY, sticky="nw")
 
         # Integration time control
         self.integration_time_label = ttk.Label(self.wasatch_parameters_frame, text="Integration Time (ms):")
-        self.integration_time_label.grid(row=2, column=0, padx=PADX, pady=PADY)
+        self.integration_time_label.grid(row=0, column=0, padx=PADX, pady=PADY)
         self.integration_time_entry = ttk.Entry(self.wasatch_parameters_frame)
-        self.integration_time_entry.grid(row=2, column=1, padx=PADX, pady=PADY)
+        self.integration_time_entry.grid(row=0, column=1, padx=PADX, pady=PADY)
         self.integration_time_entry.insert(tk.END, str(self.integration_time))  # Default value
 
         self.set_integration_time_button = ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_integration_time)
-        self.set_integration_time_button.grid(row=2, column=2, padx=PADX, pady=PADY)
+        self.set_integration_time_button.grid(row=0, column=2, padx=PADX, pady=PADY)
 
         # Scans to average control
         self.scans_to_average_label = ttk.Label(self.wasatch_parameters_frame, text="Scans to Average:")
-        self.scans_to_average_label.grid(row=3, column=0, padx=PADX, pady=PADY)
+        self.scans_to_average_label.grid(row=1, column=0, padx=PADX, pady=PADY)
         self.scans_to_average_entry = ttk.Entry(self.wasatch_parameters_frame)
-        self.scans_to_average_entry.grid(row=3, column=1, padx=PADX, pady=PADY)
+        self.scans_to_average_entry.grid(row=1, column=1, padx=PADX, pady=PADY)
         self.scans_to_average_entry.insert(tk.END, str(self.scans_to_average))  # Default value
 
         self.set_scans_to_average_button = ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_scans_to_average)
-        self.set_scans_to_average_button.grid(row=3, column=2, padx=PADX, pady=PADY)
+        self.set_scans_to_average_button.grid(row=1, column=2, padx=PADX, pady=PADY)
 
         # Boxcar half width
         self.boxcar_half_width_label = ttk.Label(self.wasatch_parameters_frame, text="Boxcar half width:")
-        self.boxcar_half_width_label.grid(row=4, column=0, padx=PADX, pady=PADY)
+        self.boxcar_half_width_label.grid(row=2, column=0, padx=PADX, pady=PADY)
         self.boxcar_half_width_entry = ttk.Entry(self.wasatch_parameters_frame)
-        self.boxcar_half_width_entry.grid(row=4, column=1, padx=PADX, pady=PADY)
+        self.boxcar_half_width_entry.grid(row=2, column=1, padx=PADX, pady=PADY)
         self.boxcar_half_width_entry.insert(tk.END, str(self.boxcar_half_width))
-        ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_boxcar_half_width).grid(row=4, column=2, padx=PADX, pady=PADY)
+        ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_boxcar_half_width).grid(row=2, column=2, padx=PADX, pady=PADY)
 
         # Delay ms
         self.delay_ms_label = ttk.Label(self.wasatch_parameters_frame, text="Delay (ms):")
-        self.delay_ms_label.grid(row=5, column=0, padx=PADX, pady=PADY)
+        self.delay_ms_label.grid(row=3, column=0, padx=PADX, pady=PADY)
         self.delay_ms_entry = ttk.Entry(self.wasatch_parameters_frame)
-        self.delay_ms_entry.grid(row=5, column=1, padx=PADX, pady=PADY)
+        self.delay_ms_entry.grid(row=3, column=1, padx=PADX, pady=PADY)
         self.delay_ms_entry.insert(tk.END, str(self.delay_ms))
-        ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_delay_ms).grid(row=5, column=2, padx=PADX, pady=PADY)
+        ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_delay_ms).grid(row=3, column=2, padx=PADX, pady=PADY)
 
         self.max_spectra_label = ttk.Label(self.wasatch_parameters_frame, text="Max Spectra:")
-        self.max_spectra_label.grid(row=6, column=0, padx=PADX, pady=PADY)
+        self.max_spectra_label.grid(row=4, column=0, padx=PADX, pady=PADY)
         self.max_spectra_entry = ttk.Entry(self.wasatch_parameters_frame)
-        self.max_spectra_entry.grid(row=6, column=1, padx=PADX, pady=PADY)
+        self.max_spectra_entry.grid(row=4, column=1, padx=PADX, pady=PADY)
         self.max_spectra_entry.insert(tk.END, str(self.max_spectra))  # Default value
 
         self.set_max_spectra_button = ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_max_spectra)
-        self.set_max_spectra_button.grid(row=6, column=2, padx=PADX, pady=PADY)
+        self.set_max_spectra_button.grid(row=4, column=2, padx=PADX, pady=PADY)
 
         # Measuring frame
         self.wasatch_measure_frame = ttk.LabelFrame(self.right_frame, text="Measuring", **FRAME_KWARGS)
-        self.wasatch_measure_frame.grid(row=3, column=1, padx=PADX, pady=PADY, sticky="nw")
-
+        self.wasatch_measure_frame.grid(row=3, column=0, padx=PADX, pady=PADY, sticky="nw")
 
         self.wasatch_samples_countX_label = ttk.Label(self.wasatch_measure_frame, text="Sample count X axis")
         self.wasatch_samples_countX_label.grid(row=0, column=1, padx=PADX, pady=PADY)
@@ -379,8 +401,8 @@ class MyGUI:
 
         # 3D head position preview
         self.map_frame = ttk.LabelFrame(self.right_frame, text="Head position 3D", **FRAME_KWARGS)
+        self.map_frame.grid(row=0, column=1, padx=PADX, pady=PADY, sticky="ne")
 
-        self.map_frame.grid(row=0, column=2, padx=PADX, pady=PADY, sticky="ne")
         self.map_fig = Figure(figsize=(2.5, 2.5), dpi=100)
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
         self.map_canvas = FigureCanvasTkAgg(self.map_fig, master=self.map_frame)
@@ -399,8 +421,8 @@ class MyGUI:
 
         # Points preview under head position
         self.points_frame = ttk.LabelFrame(self.right_frame, text="Scan points", **FRAME_KWARGS)
+        self.points_frame.grid(row=1, column=1, padx=PADX, pady=PADY, sticky="ne")
 
-        self.points_frame.grid(row=1, column=2, padx=PADX, pady=PADY, sticky="ne")
         self.wasatch.init_points_plot(self.points_frame)
         zoom_frame = ttk.Frame(self.points_frame)
         zoom_frame.pack()
@@ -409,8 +431,8 @@ class MyGUI:
 
         # Spectrum plot below scan points
         self.spectrum_frame = ttk.LabelFrame(self.right_frame, text="Spectrum", **FRAME_KWARGS)
+        self.spectrum_frame.grid(row=2, column=1, padx=PADX, pady=PADY, sticky="ne")
 
-        self.spectrum_frame.grid(row=2, column=2, padx=PADX, pady=PADY, sticky="ne")
         self.wasatch.init_spectrum_plot(self.spectrum_frame)
         zoom_frame = ttk.Frame(self.spectrum_frame)
         zoom_frame.pack()
@@ -418,7 +440,7 @@ class MyGUI:
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25)).pack(side="left")
 
         self.help_button = ttk.Button(self.right_frame, text="Help", command=self.show_help)
-        self.help_button.grid(row=5, column=1, padx=PADX, pady=PADY, sticky="ew")
+        self.help_button.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="ew")
 
         self.calculate_predicted_points()
 
@@ -470,6 +492,8 @@ class MyGUI:
             ax.set_xlim3d(xmid - xspan, xmid + xspan)
             ax.set_ylim3d(ymid - yspan, ymid + yspan)
             ax.set_zlim3d(zmid - zspan, zmid + zspan)
+            ax.set_box_aspect([1, 1, 1])
+
         else:
             xlim = ax.get_xlim()
             ylim = ax.get_ylim()
@@ -535,21 +559,27 @@ class MyGUI:
         except ValueError:
             return
 
-        if not (self.user_positions['1'] and self.user_positions['2']):
+        defined = [p for p in self.user_positions.values() if p]
+        if len(defined) < 2:
+
             self.wasatch.scan_points = self.user_positions
             self.wasatch.points_zoomed = False
             self.wasatch.update_points_plot()
             return
 
-        y2 = self.user_positions['4']['Y'] if self.user_positions['4'] else self.user_positions['1']['Y']
-        z2 = self.user_positions['5']['Z'] if self.user_positions['5'] else self.user_positions['1']['Z']
+        xs = [p['X'] for p in defined]
+        ys = [p['Y'] for p in defined]
+        zs = [p['Z'] for p in defined]
+        x1, x2 = min(xs), max(xs)
+        y1, y2 = min(ys), max(ys)
+        z1, z2 = min(zs), max(zs)
         try:
             self.wasatch.points_zoomed = False
             self.wasatch.set_scan_bounds(
-                self.user_positions['1']['X'], self.user_positions['2']['X'],
-                self.user_positions['1']['Y'], y2,
-                self.user_positions['1']['Z'],
-                z2,
+                x1, x2,
+                y1, y2,
+                z1, z2,
+
                 self.user_positions,
                 count_x,
                 count_y,
@@ -559,6 +589,14 @@ class MyGUI:
         except Exception:
             self.wasatch.scan_points = self.user_positions
             self.wasatch.update_points_plot()
+
+    def connect_spectrometer(self):
+        self.log("Connecting spectrometer...")
+        device = self.wasatch.connect()
+        if device:
+            self.log("Spectrometer connected")
+        else:
+            self.log("No spectrometer found")
 
     def toggle_connection(self):
         if self.serial.connected:
@@ -586,12 +624,13 @@ class MyGUI:
         elif direction == '\u2193':  # Rear (Y-)
             self.current_position['Y'] -= step
             command = f'G1 Y-{step} F{speed}'
-        elif direction == '\u2190':  # Left (X-)
-            self.current_position['X'] -= step
-            command = f'G1 X-{step} F{speed}'
-        elif direction == '\u2192':  # Right (X+)
+        elif direction == '\u2190':  # Left (X+)
             self.current_position['X'] += step
             command = f'G1 X{step} F{speed}'
+        elif direction == '\u2192':  # Right (X-)
+            self.current_position['X'] -= step
+            command = f'G1 X-{step} F{speed}'
+
         elif direction == 'Up':  # Up (Z+)
             self.current_position['Z'] += step
             command = f'G1 Z{step} F{speed}'
@@ -702,6 +741,7 @@ class MyGUI:
             self.map_ax.set_xlim(min(xs), max(xs))
             self.map_ax.set_ylim(min(ys), max(ys))
             self.map_ax.set_zlim(min(zs), max(zs))
+        self.map_ax.set_box_aspect([1, 1, 1])
         self.map_ax.invert_zaxis()
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
