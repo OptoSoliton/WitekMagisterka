@@ -30,7 +30,8 @@ class Wasatch:
         self.light_spectrum = None
         self.args = self.parse_args(argv)
         self.logger = applog.MainLogger(self.args.log_level)
-        print(f"Wasatch.PY version {wasatch.__version__}")
+        log.info(f"Wasatch.PY version {wasatch.__version__}")
+
         self.root = root
 
         # Figure for spectrum plot (embedded by GUI)
@@ -54,6 +55,7 @@ class Wasatch:
 
     def set_logger_handler(self, logger_handler):
         self.logger.addHandler(logger_handler)
+        log.addHandler(logger_handler)
 
     def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None,
                         count_x=1, count_y=1, count_z=1,
@@ -136,7 +138,8 @@ class Wasatch:
         # refresh device list in case USB state changed
         self.bus.update()
         if not self.bus.device_ids:
-            print("No Wasatch USB spectrometers found.")
+            log.info("No Wasatch USB spectrometers found.")
+
             return None
 
         device_id = self.bus.device_ids[0]
@@ -157,6 +160,8 @@ class Wasatch:
             else:
                 device = OceanDevice(device_id)
 
+        log.info("Connecting to %s", device_id)
+
         ok = device.connect()
         if not ok:
             log.critical("connect: can't connect to %s", device_id)
@@ -165,11 +170,13 @@ class Wasatch:
         self.device = device
         self.reading_count = 0
         self.init_file()
+        log.info("Spectrometer connected")
+
         return device
 
     def run(self, label):
         if self.device is None:
-            print("Not connected to spectrometer")
+            log.info("Not connected to spectrometer")
             return False
 
         self.type = label
@@ -184,7 +191,8 @@ class Wasatch:
         reading_time_ms = int((end_time - start_time).microseconds / 1000)
         sleep_ms = self.args.delay_ms - reading_time_ms
         if sleep_ms > 0:
-            print(f"sleeping {sleep_ms} ms ({reading_time_ms} ms already passed)")
+            log.debug(f"sleeping {sleep_ms} ms ({reading_time_ms} ms already passed)")
+
             try:
                 time.sleep(float(sleep_ms) / 1000)
             except Exception:
@@ -364,6 +372,8 @@ class Wasatch:
                 self.points_ax.set_xlim(min(xs), max(xs))
                 self.points_ax.set_ylim(min(ys), max(ys))
                 self.points_ax.set_zlim(min(zs), max(zs))
+            self.points_ax.set_box_aspect([1, 1, 1])
+
             self.points_ax.invert_zaxis()
 
         if self.scan_points:
@@ -389,7 +399,7 @@ class Wasatch:
         self.points_ax.set_zlabel('Z')
         if self.scan_points:
             self.points_ax.legend(loc='best')
-
+        self.points_ax.set_box_aspect([1, 1, 1])
         self.points_canvas.draw()
 
     def init_points_plot(self, frame):
