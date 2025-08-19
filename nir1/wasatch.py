@@ -35,7 +35,7 @@ class Wasatch:
         self.root = root
 
         # Figure for spectrum plot (embedded by GUI)
-        self.fig = Figure(figsize=(2.5, 2.5), dpi=100)
+        self.fig = Figure(figsize=(2.5, 1.25), dpi=100)
         self.ax = self.fig.add_subplot(111)
         self.canvas = None
 
@@ -402,6 +402,12 @@ class Wasatch:
                     self.points_ax.set_ylim(min(ys), max(ys))
                     self.points_ax.set_zlim(min(zs), max(zs))
                 self.points_ax.set_box_aspect([1, 1, 1])
+                self.points_ax.auto_scale_xyz(
+                    self.points_ax.get_xlim3d(),
+                    self.points_ax.get_ylim3d(),
+                    self.points_ax.get_zlim3d(),
+                )
+
                 self.points_ax.invert_zaxis()
 
             if self.scan_points:
