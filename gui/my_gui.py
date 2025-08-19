@@ -577,6 +577,7 @@ class MyGUI:
 
         self.root.after(0, _do)
 
+
     def update_volume_display(self):
         import itertools
 
