@@ -643,20 +643,30 @@ class MyGUI:
         except ValueError:
             return
 
-        origin = self.user_positions.get('1')
-        if not origin:
+        defined = {k: v for k, v in self.user_positions.items() if v}
+        if len(defined) < 2:
             self.wasatch.scan_points = self.user_positions
             self.wasatch.points_zoomed = False
             self.wasatch.update_points_plot()
             self.estimated_time_var.set("Estimated time: n/a")
             return
 
-        x1 = origin['X']
-        y1 = origin['Y']
-        z1 = origin['Z']
-        x2 = self.user_positions['2']['X'] if self.user_positions['2'] else x1
-        y2 = self.user_positions['4']['Y'] if self.user_positions['4'] else y1
-        z2 = self.user_positions['5']['Z'] if self.user_positions['5'] else z1
+        xs = [p['X'] for p in defined.values()]
+        ys = [p['Y'] for p in defined.values()]
+        zs = [p['Z'] for p in defined.values()]
+
+        if '1' in defined:
+            x1 = defined['1']['X']
+            y1 = defined['1']['Y']
+            z1 = defined['1']['Z']
+        else:
+            x1 = min(xs)
+            y1 = min(ys)
+            z1 = min(zs)
+
+        x2 = max(xs) if x1 == min(xs) else min(xs)
+        y2 = max(ys) if y1 == min(ys) else min(ys)
+        z2 = max(zs) if z1 == min(zs) else min(zs)
 
         if x1 == x2 and count_x > 1:
             self.wasatch_samples_countX_entry.delete(0, tk.END)
@@ -710,12 +720,20 @@ class MyGUI:
                 self.wasatch.bounds[4], self.wasatch.bounds[5],
             )
         else:
-            start_x = self.user_positions['1']['X']
-            start_y = self.user_positions['1']['Y']
-            start_z = self.user_positions['1']['Z']
-            end_x = self.user_positions['2']['X'] if self.user_positions['2'] else start_x
-            end_y = self.user_positions['4']['Y'] if self.user_positions['4'] else start_y
-            end_z = self.user_positions['5']['Z'] if self.user_positions['5'] else start_z
+            xs = [p['X'] for p in defined]
+            ys = [p['Y'] for p in defined]
+            zs = [p['Z'] for p in defined]
+            if self.user_positions.get('1'):
+                start_x = self.user_positions['1']['X']
+                start_y = self.user_positions['1']['Y']
+                start_z = self.user_positions['1']['Z']
+            else:
+                start_x = min(xs)
+                start_y = min(ys)
+                start_z = min(zs)
+            end_x = max(xs) if start_x == min(xs) else min(xs)
+            end_y = max(ys) if start_y == min(ys) else min(ys)
+            end_z = max(zs) if start_z == min(zs) else min(zs)
         if start_x == end_x and count_x > 1:
             self.wasatch_samples_countX_entry.delete(0, tk.END)
             self.wasatch_samples_countX_entry.insert(0, '1')
@@ -799,12 +817,12 @@ class MyGUI:
         elif direction == '\u2193':  # Rear (Y-)
             self.current_position['Y'] -= step
             command = f'G1 Y-{step} F{speed}'
-        elif direction == '\u2190':  # Left (X+)
-            self.current_position['X'] += step
-            command = f'G1 X{step} F{speed}'
-        elif direction == '\u2192':  # Right (X-)
+        elif direction == '\u2190':  # Left (X-)
             self.current_position['X'] -= step
             command = f'G1 X-{step} F{speed}'
+        elif direction == '\u2192':  # Right (X+)
+            self.current_position['X'] += step
+            command = f'G1 X{step} F{speed}'
         elif direction == 'Up':  # Up (Z+)
             self.current_position['Z'] += step
             command = f'G1 Z{step} F{speed}'
