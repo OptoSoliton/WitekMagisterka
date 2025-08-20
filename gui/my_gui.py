@@ -28,6 +28,33 @@ class TkLogHandler(logging.Handler):
         except Exception:
             pass
 
+
+class ToolTip:
+    """Simple tooltip that appears on hover."""
+
+    def __init__(self, widget, text: str):
+        self.widget = widget
+        self.text = text
+        self.tip = None
+        widget.bind("<Enter>", self.show)
+        widget.bind("<Leave>", self.hide)
+
+    def show(self, _event=None):
+        if self.tip or not self.text:
+            return
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 10
+        self.tip = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        label = tk.Label(tw, text=self.text, background="#ffffe0", relief="solid", borderwidth=1)
+        label.pack(ipadx=1)
+        tw.wm_geometry(f"+{x}+{y}")
+
+    def hide(self, _event=None):
+        if self.tip:
+            self.tip.destroy()
+            self.tip = None
+
 class MyGUI:
     def __init__(self, root, serial_connection, wasatch):
         self.root = root
@@ -334,14 +361,22 @@ class MyGUI:
             entry.bind("<KeyRelease>", lambda e: self.calculate_predicted_points())
 
         self.wasatch_dark_button = ttk.Button(
-            self.wasatch_measure_frame, text="Dark", command=self.run_dark
+            self.wasatch_measure_frame,
+            text="Dark",
+            command=self.run_dark,
+            state=tk.DISABLED,
         )
         self.wasatch_dark_button.grid(row=3, column=0, columnspan=2, padx=PADX, pady=PADY)
+        ToolTip(self.wasatch_dark_button, "Record dark reference at current position")
 
         self.wasatch_light_button = ttk.Button(
-            self.wasatch_measure_frame, text="Light", command=self.run_light
+            self.wasatch_measure_frame,
+            text="Light",
+            command=self.run_light,
+            state=tk.DISABLED,
         )
         self.wasatch_light_button.grid(row=3, column=2, columnspan=2, padx=PADX, pady=PADY)
+        ToolTip(self.wasatch_light_button, "Record light reference at current position")
 
         # Progress bar
         self.progress_bar = ttk.Progressbar(self.wasatch_measure_frame, orient="horizontal", length=300,  mode="determinate")
@@ -359,19 +394,22 @@ class MyGUI:
 
         self.run_once_button = ttk.Button(self.wasatch_measure_frame, text="Run once", command=self.start_measurement_once)
         self.run_once_button.grid(row=6, column=0, padx=PADX, pady=PADY)
+        ToolTip(self.run_once_button, "Acquire a single measurement at current position")
 
         self.run_area_button = ttk.Button(self.wasatch_measure_frame, text="Run area", command=self.start_measurement)
         self.run_area_button.grid(row=6, column=1, padx=PADX, pady=PADY)
+        ToolTip(self.run_area_button, "Start scan over defined area")
 
         self.wasatch_stop_button = ttk.Button(self.wasatch_measure_frame, text="Stop", command=self.stop_measurement)
         self.wasatch_stop_button.grid(row=6, column=2, padx=PADX, pady=PADY)
-
+        
         self.pause_button = ttk.Button(
             self.wasatch_measure_frame,
             text="Pause for reference",
             command=self.pause_for_reference
         )
         self.pause_button.grid(row=7, column=0, columnspan=2, padx=PADX, pady=PADY)
+        ToolTip(self.pause_button, "Pause scan to take dark and optional light references")
         self.continue_button = ttk.Button(
             self.wasatch_measure_frame,
             text="Continue",
@@ -379,6 +417,7 @@ class MyGUI:
             state=tk.DISABLED
         )
         self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
+        ToolTip(self.continue_button, "Return to saved position and resume scan")
 
         self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
         self.estimated_time_label = ttk.Label(
@@ -479,6 +518,8 @@ class MyGUI:
                 child.config(state=tk.NORMAL)
         self.pause_button.config(state=tk.DISABLED)
         self.continue_button.config(state=tk.DISABLED)
+        self.wasatch_dark_button.config(state=tk.DISABLED)
+        self.wasatch_light_button.config(state=tk.DISABLED)
 
     def show_help(self):
         from tkinter import messagebox
@@ -487,7 +528,12 @@ class MyGUI:
             "- Define positions with the SET buttons before running.\n"
             "- Scroll the window if some widgets are hidden.\n"
             "- Files are automatically numbered when existing.\n"
-            "- Ensure matplotlib is installed for plotting."
+            "- Ensure matplotlib is installed for plotting.\n\n"
+            "Workflow:\n"
+            "- Use 'Run area' to scan the volume defined by your points.\n"
+            "- During a scan, press 'Pause for reference' to take dark and light references.\n"
+            "  Move the head, click 'Dark' and optionally 'Light', then 'Continue' to resume.\n"
+            "- Hover over buttons for additional tips."
         )
         messagebox.showinfo("Help", msg)
 
@@ -1169,10 +1215,13 @@ class MyGUI:
             return np.interp(step, steps, times)
 
     def run_dark(self):
+        if not self.paused:
+            self.log("Pause measurement before taking dark reference")
+            return
         self.ensure_file_path()
         if self.wasatch.outfile is None or self.wasatch.outfile.closed:
             self.wasatch.init_file()
-        self.log(f"Dark measure")
+        self.log("Dark measure")
         pos = (
             self.current_position['X'],
             self.current_position['Y'],
@@ -1199,10 +1248,13 @@ class MyGUI:
         self.continue_button.config(state=tk.NORMAL)
 
     def run_light(self):
+        if not self.paused:
+            self.log("Pause measurement before taking light reference")
+            return
         self.ensure_file_path()
         if self.wasatch.outfile is None or self.wasatch.outfile.closed:
             self.wasatch.init_file()
-        self.log(f"Light measure")
+        self.log("Light measure")
         pos = (
             self.current_position['X'],
             self.current_position['Y'],
@@ -1234,6 +1286,11 @@ class MyGUI:
         self.dark_taken = False
         self.continue_button.config(state=tk.DISABLED)
         self.pause_position = self.current_position.copy()
+        self.wasatch_dark_button.config(state=tk.NORMAL)
+        self.wasatch_light_button.config(state=tk.NORMAL)
+        for frame in [self.control_frame, self.step_speed_frame]:
+            for child in frame.winfo_children():
+                child.config(state=tk.NORMAL)
         self.log("Paused. Take dark reference and optionally light, then press Continue")
 
     def continue_measurement(self):
@@ -1252,4 +1309,9 @@ class MyGUI:
         self.update_map_position(target['X'], target['Y'], target['Z'])
         self.paused = False
         self.continue_button.config(state=tk.DISABLED)
+        self.wasatch_dark_button.config(state=tk.DISABLED)
+        self.wasatch_light_button.config(state=tk.DISABLED)
+        for frame in [self.control_frame, self.step_speed_frame]:
+            for child in frame.winfo_children():
+                child.config(state=tk.DISABLED)
         self.log("Resuming measurement")
