@@ -318,7 +318,7 @@ class Wasatch:
 
     def set_integration_time(self, integration_time_ms):
         self.args.integration_time_ms = integration_time_ms
-        print(f'Inetration time set to {integration_time_ms} ms')
+        print(f'Integration time set to {integration_time_ms} ms')
 
     def set_scans_to_average(self, scans_to_average):
         self.args.scans_to_average = scans_to_average
