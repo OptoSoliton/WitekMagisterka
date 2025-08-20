@@ -202,7 +202,7 @@ class Wasatch:
         self.device.change_setting("detector_tec_enable", True)
 
         start_time = datetime.datetime.now()
-        self.attempt_reading()
+        ok = self.attempt_reading()
         end_time = datetime.datetime.now()
 
         reading_time_ms = int((end_time - start_time).microseconds / 1000)
@@ -213,7 +213,7 @@ class Wasatch:
                 time.sleep(float(sleep_ms) / 1000)
             except Exception:
                 pass
-        return True
+        return ok
 
     def run_with_position(self, label, x, y, z):
         self.position = (x, y, z)
@@ -223,21 +223,22 @@ class Wasatch:
         try:
             reading_response = self.acquire_reading()
         except Exception as exc:
-            print("attempt_reading caught exception", exc_info=1)
-            return
+            log.error("attempt_reading exception: %s", exc, exc_info=True)
+            return False
 
         if isinstance(reading_response.data, bool):
             if reading_response.data:
-                print("received poison-pill, exiting")
-                return
+                log.warning("received poison-pill, exiting")
             else:
-                print("no reading available")
-                return
+                log.warning("no reading available")
+            return False
 
         if reading_response.data.failure:
-            return
+            log.error("spectrometer returned failure")
+            return False
 
         self.process_reading(reading_response.data)
+        return True
 
     def acquire_reading(self):
         while True:
