@@ -1,5 +1,6 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, filedialog
+from tkinter import ttk, scrolledtext, filedialog, messagebox
+import queue
 import time
 import threading
 import numpy as np
@@ -732,6 +733,16 @@ class MyGUI:
             self.log_text.see(tk.END)
         self.root.after(0, _do)
 
+    def prompt_retry(self, msg):
+        """Show a retry/cancel dialog from the main thread and return True to retry."""
+        q = queue.Queue()
+
+        def _ask():
+            q.put(messagebox.askretrycancel("Measurement error", msg))
+
+        self.root.after(0, _ask)
+        return q.get()
+
     def move(self, direction):
         step = float(self.get_step())
         speed = self.get_speed()
@@ -990,12 +1001,17 @@ class MyGUI:
         self.wasatch.init_file()
         self.log(run_once_string)
         self.wasatch.position = (None, None, None)
-        finished = self.wasatch.run(run_once_string)
+        finished = False
+        while True:
+            finished = self.wasatch.run(run_once_string)
+            if finished:
+                break
+            self.log("Single measurement failed, prompting user")
+            if not self.prompt_retry("Measurement failed. Retry?"):
+                break
         self.wasatch.close_file()
-
-        if finished == False:
-            self.running = False
-            self.log("Stopped. Measure from wasatch.py return False.")
+        if not finished:
+            self.log("Single measurement aborted")
         self.enable_controls()
         return
 
@@ -1091,18 +1107,29 @@ class MyGUI:
                         dz = abs(abs_z - self.current_position['Z'])
                         max_step = max(dx, dy, dz)
                         self.measureDelayFromSteps(max_step)
-                        current_measure += 1
                         self.current_position = {'X': abs_x, 'Y': abs_y, 'Z': abs_z}
                         self.update_map_position(abs_x, abs_y, abs_z)
-                        self.log(f"Measure {current_measure} out of {measure_count}.")
-                        finished = self.wasatch.run_with_position("scan", abs_x, abs_y, abs_z)
-                        progress = int((current_measure / measure_count) * 100)
 
-                        self.update_progress(progress)
-                        if not finished:
-                            self.running = False
-                            self.log("Stopped. Measure from wasatch.py returned False.")
+                        success = False
+                        while self.running and not success:
+                            finished = self.wasatch.run_with_position("scan", abs_x, abs_y, abs_z)
+                            if finished:
+                                success = True
+                            else:
+                                self.log("Measurement failed, prompting user")
+                                if not self.prompt_retry(
+                                    f"Measurement failed at X:{abs_x} Y:{abs_y} Z:{abs_z}. Retry?"
+                                ):
+                                    self.running = False
+                                    break
+
+                        if not self.running:
                             break
+
+                        current_measure += 1
+                        progress = int((current_measure / measure_count) * 100)
+                        self.update_progress(progress)
+                        self.log(f"Measure {current_measure} out of {measure_count}.")
 
                     if not self.running:
                         self.log("Stopped.")
@@ -1139,11 +1166,14 @@ class MyGUI:
             self.current_position['Y'],
             self.current_position['Z'],
         )
-        finished = self.wasatch.run_with_position("dark", *pos)
-        if finished is False:
-            self.running = False
-            self.log("Stopped. Measure from wasatch.py return False.")
-            return
+        while True:
+            finished = self.wasatch.run_with_position("dark", *pos)
+            if finished:
+                break
+            self.log("Dark measurement failed, prompting user")
+            if not self.prompt_retry("Dark measurement failed. Retry?"):
+                self.log("Dark measurement aborted")
+                return
         self.dark_taken = True
         self.continue_button.config(state=tk.NORMAL)
 
@@ -1157,11 +1187,14 @@ class MyGUI:
             self.current_position['Y'],
             self.current_position['Z'],
         )
-        finished = self.wasatch.run_with_position("light", *pos)
-        if finished is False:
-            self.running = False
-            self.log("Stopped. Measure from wasatch.py return False.")
-            return
+        while True:
+            finished = self.wasatch.run_with_position("light", *pos)
+            if finished:
+                break
+            self.log("Light measurement failed, prompting user")
+            if not self.prompt_retry("Light measurement failed. Retry?"):
+                self.log("Light measurement aborted")
+                return
 
     def pause_for_reference(self):
         if not self.running:
