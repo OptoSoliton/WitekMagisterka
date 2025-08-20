@@ -1111,17 +1111,29 @@ class MyGUI:
                         self.update_map_position(abs_x, abs_y, abs_z)
 
                         success = False
+                        attempts = 0
+                        max_attempts = 3
                         while self.running and not success:
                             finished = self.wasatch.run_with_position("scan", abs_x, abs_y, abs_z)
                             if finished:
                                 success = True
                             else:
-                                self.log("Measurement failed, prompting user")
+                                attempts += 1
+                                self.log(
+                                    f"Measurement attempt {attempts} failed at X:{abs_x} Y:{abs_y} Z:{abs_z}"
+                                )
+                                # try to auto-reconnect before retrying
+                                self.wasatch.connect()
+                                if attempts < max_attempts:
+                                    self.log("Automatically retrying measurement")
+                                    continue
+                                self.log("Max auto-retries exceeded")
                                 if not self.prompt_retry(
                                     f"Measurement failed at X:{abs_x} Y:{abs_y} Z:{abs_z}. Retry?"
                                 ):
                                     self.running = False
                                     break
+                                attempts = 0
 
                         if not self.running:
                             break
@@ -1166,14 +1178,23 @@ class MyGUI:
             self.current_position['Y'],
             self.current_position['Z'],
         )
+        attempts = 0
+        max_attempts = 3
         while True:
             finished = self.wasatch.run_with_position("dark", *pos)
             if finished:
                 break
-            self.log("Dark measurement failed, prompting user")
+            attempts += 1
+            self.log(f"Dark measurement attempt {attempts} failed")
+            self.wasatch.connect()
+            if attempts < max_attempts:
+                self.log("Automatically retrying dark measurement")
+                continue
+            self.log("Max auto-retries for dark measurement exceeded")
             if not self.prompt_retry("Dark measurement failed. Retry?"):
                 self.log("Dark measurement aborted")
                 return
+            attempts = 0
         self.dark_taken = True
         self.continue_button.config(state=tk.NORMAL)
 
@@ -1187,14 +1208,23 @@ class MyGUI:
             self.current_position['Y'],
             self.current_position['Z'],
         )
+        attempts = 0
+        max_attempts = 3
         while True:
             finished = self.wasatch.run_with_position("light", *pos)
             if finished:
                 break
-            self.log("Light measurement failed, prompting user")
+            attempts += 1
+            self.log(f"Light measurement attempt {attempts} failed")
+            self.wasatch.connect()
+            if attempts < max_attempts:
+                self.log("Automatically retrying light measurement")
+                continue
+            self.log("Max auto-retries for light measurement exceeded")
             if not self.prompt_retry("Light measurement failed. Retry?"):
                 self.log("Light measurement aborted")
                 return
+            attempts = 0
 
     def pause_for_reference(self):
         if not self.running:
