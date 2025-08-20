@@ -799,12 +799,12 @@ class MyGUI:
         elif direction == '\u2193':  # Rear (Y-)
             self.current_position['Y'] -= step
             command = f'G1 Y-{step} F{speed}'
-        elif direction == '\u2190':  # Left (X-)
-            self.current_position['X'] -= step
-            command = f'G1 X-{step} F{speed}'
-        elif direction == '\u2192':  # Right (X+)
+        elif direction == '\u2190':  # Left (X+)
             self.current_position['X'] += step
             command = f'G1 X{step} F{speed}'
+        elif direction == '\u2192':  # Right (X-)
+            self.current_position['X'] -= step
+            command = f'G1 X-{step} F{speed}'
         elif direction == 'Up':  # Up (Z+)
             self.current_position['Z'] += step
             command = f'G1 Z{step} F{speed}'
@@ -1195,6 +1195,21 @@ class MyGUI:
 
             self.serial.send_gcode('G91')
             self.running = False
+
+        expected_lines = self.samples_count_x * self.samples_count_y * self.samples_count_z
+        if self.wasatch.outfile:
+            self.wasatch.outfile.flush()
+            try:
+                with open(self.wasatch.args.outfile, 'r') as fh:
+                    written = sum(1 for _ in fh) - 1
+                if written != expected_lines:
+                    self.log(
+                        f"Warning: expected {expected_lines} points, but file has {written}"
+                    )
+                else:
+                    self.log(f"CSV contains {written} lines as expected")
+            except Exception as exc:
+                self.log(f"Failed to verify CSV completeness: {exc}")
 
     def waitForCNC(self):
         self.log("Waiting for CNC to finish move")
