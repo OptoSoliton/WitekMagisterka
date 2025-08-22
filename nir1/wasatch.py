@@ -207,7 +207,7 @@ class Wasatch:
         self.device.change_setting("detector_tec_enable", True)
 
         start_time = datetime.datetime.now()
-        self.attempt_reading()
+        ok = self.attempt_reading()
         end_time = datetime.datetime.now()
 
         reading_time_ms = int((end_time - start_time).microseconds / 1000)
@@ -219,7 +219,7 @@ class Wasatch:
                 time.sleep(float(sleep_ms) / 1000)
             except Exception:
                 pass
-        return True
+        return ok
 
     def run_with_position(self, label, x, y, z):
         self.position = (x, y, z)
@@ -229,21 +229,22 @@ class Wasatch:
         try:
             reading_response = self.acquire_reading()
         except Exception as exc:
-            print("attempt_reading caught exception", exc_info=1)
-            return
+            log.error("attempt_reading exception: %s", exc, exc_info=True)
+            return False
 
         if isinstance(reading_response.data, bool):
             if reading_response.data:
-                print("received poison-pill, exiting")
-                return
+                log.warning("received poison-pill, exiting")
             else:
-                print("no reading available")
-                return
+                log.warning("no reading available")
+            return False
 
         if reading_response.data.failure:
-            return
+            log.error("spectrometer returned failure")
+            return False
 
         self.process_reading(reading_response.data)
+        return True
 
     def acquire_reading(self):
         while True:
@@ -324,7 +325,8 @@ class Wasatch:
 
     def set_integration_time(self, integration_time_ms):
         self.args.integration_time_ms = integration_time_ms
-        print(f'Inetration time set to {integration_time_ms} ms')
+        print(f'Integration time set to {integration_time_ms} ms')
+
 
     def set_scans_to_average(self, scans_to_average):
         self.args.scans_to_average = scans_to_average
@@ -407,7 +409,6 @@ class Wasatch:
                     self.points_ax.get_ylim3d(),
                     self.points_ax.get_zlim3d(),
                 )
-
                 self.points_ax.invert_zaxis()
 
             if self.scan_points:

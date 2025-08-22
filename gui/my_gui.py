@@ -1,5 +1,6 @@
 import tkinter as tk
-from tkinter import ttk, scrolledtext, filedialog
+from tkinter import ttk, scrolledtext, filedialog, messagebox
+import queue
 import time
 import threading
 import numpy as np
@@ -26,6 +27,33 @@ class TkLogHandler(logging.Handler):
             self.gui.log(msg)
         except Exception:
             pass
+
+
+class ToolTip:
+    """Simple tooltip that appears on hover."""
+
+    def __init__(self, widget, text: str):
+        self.widget = widget
+        self.text = text
+        self.tip = None
+        widget.bind("<Enter>", self.show)
+        widget.bind("<Leave>", self.hide)
+
+    def show(self, _event=None):
+        if self.tip or not self.text:
+            return
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 10
+        self.tip = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        label = tk.Label(tw, text=self.text, background="#ffffe0", relief="solid", borderwidth=1)
+        label.pack(ipadx=1)
+        tw.wm_geometry(f"+{x}+{y}")
+
+    def hide(self, _event=None):
+        if self.tip:
+            self.tip.destroy()
+            self.tip = None
 
 
 class MyGUI:
@@ -343,14 +371,23 @@ class MyGUI:
             entry.bind("<KeyRelease>", lambda e: self.calculate_predicted_points())
 
         self.wasatch_dark_button = ttk.Button(
-            self.wasatch_measure_frame, text="Dark", command=self.run_dark
+            self.wasatch_measure_frame,
+            text="Dark",
+            command=self.run_dark,
+            state=tk.DISABLED,
         )
         self.wasatch_dark_button.grid(row=3, column=0, columnspan=2, padx=PADX, pady=PADY)
+        ToolTip(self.wasatch_dark_button, "Record dark reference at current position")
 
         self.wasatch_light_button = ttk.Button(
-            self.wasatch_measure_frame, text="Light", command=self.run_light
+            self.wasatch_measure_frame,
+            text="Light",
+            command=self.run_light,
+            state=tk.DISABLED,
         )
         self.wasatch_light_button.grid(row=3, column=2, columnspan=2, padx=PADX, pady=PADY)
+        ToolTip(self.wasatch_light_button, "Record light reference at current position")
+
 
         # Progress bar
         self.progress_bar = ttk.Progressbar(self.wasatch_measure_frame, orient="horizontal", length=300,  mode="determinate")
@@ -368,27 +405,30 @@ class MyGUI:
 
         self.run_once_button = ttk.Button(self.wasatch_measure_frame, text="Run once", command=self.start_measurement_once)
         self.run_once_button.grid(row=6, column=0, padx=PADX, pady=PADY)
+        ToolTip(self.run_once_button, "Acquire a single measurement at current position")
 
         self.run_area_button = ttk.Button(self.wasatch_measure_frame, text="Run area", command=self.start_measurement)
         self.run_area_button.grid(row=6, column=1, padx=PADX, pady=PADY)
+        ToolTip(self.run_area_button, "Start scan over defined area")
+
 
         self.wasatch_stop_button = ttk.Button(self.wasatch_measure_frame, text="Stop", command=self.stop_measurement)
         self.wasatch_stop_button.grid(row=6, column=2, padx=PADX, pady=PADY)
-
-
+        
         self.pause_button = ttk.Button(
             self.wasatch_measure_frame,
             text="Pause for reference",
             command=self.pause_for_reference
         )
-        self.pause_button.grid(row=7, column=0, columnspan=2, padx=PADX, pady=PADY)
+        self.pause_button.grid(row=7, column=0, columnspan=2, padx=PADX, pady=PADY)        ToolTip(self.pause_button, "Pause scan to take dark and optional light references")
         self.continue_button = ttk.Button(
             self.wasatch_measure_frame,
             text="Continue",
             command=self.continue_measurement,
             state=tk.DISABLED
         )
-        self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
+        self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)        ToolTip(self.continue_button, "Return to saved position and resume scan")
+
 
         self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
         self.estimated_time_label = ttk.Label(
@@ -421,7 +461,6 @@ class MyGUI:
         # 3D head position preview
         self.map_frame = ttk.LabelFrame(self.plots_frame, text="Head position 3D", **FRAME_KWARGS)
         self.map_frame.pack(padx=PADX, pady=PADY)
-
         self.map_fig = Figure(figsize=(2.5, 2.5), dpi=100)
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
         try:
@@ -463,6 +502,7 @@ class MyGUI:
         zoom_frame.pack()
         ttk.Button(
             zoom_frame,
+
           #USUN JAKBY CO OD TAD
             text="◀",
             command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1),
@@ -485,6 +525,7 @@ class MyGUI:
         ttk.Button(
             zoom_frame,
           #USUN JAKBY CO DO TAD
+
 
             text="🔍+",
             command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8),
@@ -517,6 +558,8 @@ class MyGUI:
                 child.config(state=tk.NORMAL)
         self.pause_button.config(state=tk.DISABLED)
         self.continue_button.config(state=tk.DISABLED)
+        self.wasatch_dark_button.config(state=tk.DISABLED)
+        self.wasatch_light_button.config(state=tk.DISABLED)
 
     def show_help(self):
         from tkinter import messagebox
@@ -525,7 +568,12 @@ class MyGUI:
             "- Define positions with the SET buttons before running.\n"
             "- Scroll the window if some widgets are hidden.\n"
             "- Files are automatically numbered when existing.\n"
-            "- Ensure matplotlib is installed for plotting."
+            "- Ensure matplotlib is installed for plotting.\n\n"
+            "Workflow:\n"
+            "- Use 'Run area' to scan the volume defined by your points.\n"
+            "- During a scan, press 'Pause for reference' to take dark and light references.\n"
+            "  Move the head, click 'Dark' and optionally 'Light', then 'Continue' to resume.\n"
+            "- Hover over buttons for additional tips."
         )
         messagebox.showinfo("Help", msg)
 
@@ -638,7 +686,7 @@ class MyGUI:
         except ValueError:
             return
 
-        defined = [p for p in self.user_positions.values() if p]
+        defined = {k: v for k, v in self.user_positions.items() if v}
         if len(defined) < 2:
 
             self.wasatch.scan_points = self.user_positions
@@ -647,26 +695,34 @@ class MyGUI:
             self.estimated_time_var.set("Estimated time: n/a")
             return
 
-        xs = [p['X'] for p in defined]
-        ys = [p['Y'] for p in defined]
-        zs = [p['Z'] for p in defined]
-        x1, x2 = min(xs), max(xs)
-        y1, y2 = min(ys), max(ys)
-        z1, z2 = min(zs), max(zs)
-        if x1 == x2:
-            if count_x > 1:
-                self.wasatch_samples_countX_entry.delete(0, tk.END)
-                self.wasatch_samples_countX_entry.insert(0, '1')
+        xs = [p['X'] for p in defined.values()]
+        ys = [p['Y'] for p in defined.values()]
+        zs = [p['Z'] for p in defined.values()]
+
+        if '1' in defined:
+            x1 = defined['1']['X']
+            y1 = defined['1']['Y']
+            z1 = defined['1']['Z']
+        else:
+            x1 = min(xs)
+            y1 = min(ys)
+            z1 = min(zs)
+
+        x2 = max(xs) if x1 == min(xs) else min(xs)
+        y2 = max(ys) if y1 == min(ys) else min(ys)
+        z2 = max(zs) if z1 == min(zs) else min(zs)
+
+        if x1 == x2 and count_x > 1:
+            self.wasatch_samples_countX_entry.delete(0, tk.END)
+            self.wasatch_samples_countX_entry.insert(0, '1')
             count_x = 1
-        if y1 == y2:
-            if count_y > 1:
-                self.wasatch_samples_countY_entry.delete(0, tk.END)
-                self.wasatch_samples_countY_entry.insert(0, '1')
+        if y1 == y2 and count_y > 1:
+            self.wasatch_samples_countY_entry.delete(0, tk.END)
+            self.wasatch_samples_countY_entry.insert(0, '1')
             count_y = 1
-        if z1 == z2:
-            if count_z > 1:
-                self.wasatch_samples_countZ_entry.delete(0, tk.END)
-                self.wasatch_samples_countZ_entry.insert(0, '1')
+        if z1 == z2 and count_z > 1:
+            self.wasatch_samples_countZ_entry.delete(0, tk.END)
+            self.wasatch_samples_countZ_entry.insert(0, '1')
             count_z = 1
 
         try:
@@ -680,6 +736,8 @@ class MyGUI:
                 count_x,
                 count_y,
                 count_z,
+                progress_cb=self.update_progress,
+                log_cb=self.log,
             )
             self.log("Points ready")
             self.update_time_estimate()
@@ -708,12 +766,21 @@ class MyGUI:
                 self.wasatch.bounds[4], self.wasatch.bounds[5],
             )
         else:
-            start_x = self.user_positions['1']['X']
-            start_y = self.user_positions['1']['Y']
-            start_z = self.user_positions['1']['Z']
-            end_x = self.user_positions['2']['X'] if self.user_positions['2'] else start_x
-            end_y = self.user_positions['4']['Y'] if self.user_positions['4'] else start_y
-            end_z = self.user_positions['5']['Z'] if self.user_positions['5'] else start_z
+            xs = [p['X'] for p in defined]
+            ys = [p['Y'] for p in defined]
+            zs = [p['Z'] for p in defined]
+            if self.user_positions.get('1'):
+                start_x = self.user_positions['1']['X']
+                start_y = self.user_positions['1']['Y']
+                start_z = self.user_positions['1']['Z']
+            else:
+                start_x = min(xs)
+                start_y = min(ys)
+                start_z = min(zs)
+            end_x = max(xs) if start_x == min(xs) else min(xs)
+            end_y = max(ys) if start_y == min(ys) else min(ys)
+            end_z = max(zs) if start_z == min(zs) else min(zs)
+
         if start_x == end_x and count_x > 1:
             self.wasatch_samples_countX_entry.delete(0, tk.END)
             self.wasatch_samples_countX_entry.insert(0, '1')
@@ -778,6 +845,17 @@ class MyGUI:
             self.log_text.insert(tk.END, message + "\n")
             self.log_text.see(tk.END)
         self.root.after(0, _do)
+
+    def prompt_retry(self, msg):
+        """Show a retry/cancel dialog from the main thread and return True to retry."""
+        q = queue.Queue()
+
+        def _ask():
+            q.put(messagebox.askretrycancel("Measurement error", msg))
+
+        self.root.after(0, _ask)
+        return q.get()
+
 
     def move(self, direction):
         step = float(self.get_step())
@@ -1041,12 +1119,17 @@ class MyGUI:
         self.wasatch.init_file()
         self.log(run_once_string)
         self.wasatch.position = (None, None, None)
-        finished = self.wasatch.run(run_once_string)
+        finished = False
+        while True:
+            finished = self.wasatch.run(run_once_string)
+            if finished:
+                break
+            self.log("Single measurement failed, prompting user")
+            if not self.prompt_retry("Measurement failed. Retry?"):
+                break
         self.wasatch.close_file()
-
-        if finished == False:
-            self.running = False
-            self.log("Stopped. Measure from wasatch.py return False.")
+        if not finished:
+            self.log("Single measurement aborted")
         self.enable_controls()
         return
 
@@ -1084,8 +1167,6 @@ class MyGUI:
         step_x = (end_x - start_x) / (self.samples_count_x - 1) if self.samples_count_x > 1 else 0
         step_y = (end_y - start_y) / (self.samples_count_y - 1) if self.samples_count_y > 1 else 0
         step_z = (end_z - start_z) / (self.samples_count_z - 1) if self.samples_count_z > 1 else 0
-
-
         self.log(
             f"Bounds: x1={start_x}, x2={end_x}, y1={start_y}, y2={end_y}, z1={start_z}, z2={end_z}"
         )
@@ -1106,7 +1187,6 @@ class MyGUI:
         self.waitForCNC()
         self.current_position = {'X': start_x, 'Y': start_y, 'Z': start_z}
         self.update_map_position(start_x, start_y, start_z)
-
 
         total_points = self.samples_count_x * self.samples_count_y * self.samples_count_z
         self.log(f"Total scan points: {total_points}")
@@ -1148,18 +1228,42 @@ class MyGUI:
                         dz = abs(abs_z - self.current_position['Z'])
                         max_step = max(dx, dy, dz)
                         self.measureDelayFromSteps(max_step)
-                        current_measure += 1
                         self.current_position = {'X': abs_x, 'Y': abs_y, 'Z': abs_z}
                         self.update_map_position(abs_x, abs_y, abs_z)
-                        self.log(f"Measure {current_measure} out of {measure_count}.")
-                        finished = self.wasatch.run_with_position("scan", abs_x, abs_y, abs_z)
-                        progress = int((current_measure / measure_count) * 100)
 
-                        self.update_progress(progress)
-                        if not finished:
-                            self.running = False
-                            self.log("Stopped. Measure from wasatch.py returned False.")
+                        success = False
+                        attempts = 0
+                        max_attempts = 3
+                        while self.running and not success:
+                            finished = self.wasatch.run_with_position("scan", abs_x, abs_y, abs_z)
+                            if finished:
+                                success = True
+                            else:
+                                attempts += 1
+                                self.log(
+                                    f"Measurement attempt {attempts} failed at X:{abs_x} Y:{abs_y} Z:{abs_z}"
+                                )
+                                # try to auto-reconnect before retrying
+                                self.wasatch.connect()
+                                if attempts < max_attempts:
+                                    self.log("Automatically retrying measurement")
+                                    continue
+                                self.log("Max auto-retries exceeded")
+                                if not self.prompt_retry(
+                                    f"Measurement failed at X:{abs_x} Y:{abs_y} Z:{abs_z}. Retry?"
+                                ):
+                                    self.running = False
+                                    break
+                                attempts = 0
+
+                        if not self.running:
                             break
+
+                        current_measure += 1
+
+                        progress = int((current_measure / measure_count) * 100)
+                        self.update_progress(progress)
+                        self.log(f"Measure {current_measure} out of {measure_count}.")
 
                     if not self.running:
                         self.log("Stopped.")
@@ -1168,6 +1272,21 @@ class MyGUI:
 
             self.serial.send_gcode('G91')
             self.running = False
+
+        expected_lines = self.samples_count_x * self.samples_count_y * self.samples_count_z
+        if self.wasatch.outfile:
+            self.wasatch.outfile.flush()
+            try:
+                with open(self.wasatch.args.outfile, 'r') as fh:
+                    written = sum(1 for _ in fh) - 1
+                if written != expected_lines:
+                    self.log(
+                        f"Warning: expected {expected_lines} points, but file has {written}"
+                    )
+                else:
+                    self.log(f"CSV contains {written} lines as expected")
+            except Exception as exc:
+                self.log(f"Failed to verify CSV completeness: {exc}")
 
     def waitForCNC(self):
         self.log("Waiting for CNC to finish move")
@@ -1188,38 +1307,68 @@ class MyGUI:
             return np.interp(step, steps, times)
 
     def run_dark(self):
+        if not self.paused:
+            self.log("Pause measurement before taking dark reference")
+            return
         self.ensure_file_path()
         if self.wasatch.outfile is None or self.wasatch.outfile.closed:
             self.wasatch.init_file()
-        self.log(f"Dark measure")
+        self.log("Dark measure")
         pos = (
             self.current_position['X'],
             self.current_position['Y'],
             self.current_position['Z'],
         )
-        finished = self.wasatch.run_with_position("dark", *pos)
-        if finished is False:
-            self.running = False
-            self.log("Stopped. Measure from wasatch.py return False.")
-            return
+        attempts = 0
+        max_attempts = 3
+        while True:
+            finished = self.wasatch.run_with_position("dark", *pos)
+            if finished:
+                break
+            attempts += 1
+            self.log(f"Dark measurement attempt {attempts} failed")
+            self.wasatch.connect()
+            if attempts < max_attempts:
+                self.log("Automatically retrying dark measurement")
+                continue
+            self.log("Max auto-retries for dark measurement exceeded")
+            if not self.prompt_retry("Dark measurement failed. Retry?"):
+                self.log("Dark measurement aborted")
+                return
+            attempts = 0
         self.dark_taken = True
         self.continue_button.config(state=tk.NORMAL)
 
     def run_light(self):
+        if not self.paused:
+            self.log("Pause measurement before taking light reference")
+            return
         self.ensure_file_path()
         if self.wasatch.outfile is None or self.wasatch.outfile.closed:
             self.wasatch.init_file()
-        self.log(f"Light measure")
+        self.log("Light measure")
         pos = (
             self.current_position['X'],
             self.current_position['Y'],
             self.current_position['Z'],
         )
-        finished = self.wasatch.run_with_position("light", *pos)
-        if finished is False:
-            self.running = False
-            self.log("Stopped. Measure from wasatch.py return False.")
-            return
+        attempts = 0
+        max_attempts = 3
+        while True:
+            finished = self.wasatch.run_with_position("light", *pos)
+            if finished:
+                break
+            attempts += 1
+            self.log(f"Light measurement attempt {attempts} failed")
+            self.wasatch.connect()
+            if attempts < max_attempts:
+                self.log("Automatically retrying light measurement")
+                continue
+            self.log("Max auto-retries for light measurement exceeded")
+            if not self.prompt_retry("Light measurement failed. Retry?"):
+                self.log("Light measurement aborted")
+                return
+            attempts = 0
 
     def pause_for_reference(self):
         if not self.running:
@@ -1229,6 +1378,12 @@ class MyGUI:
         self.dark_taken = False
         self.continue_button.config(state=tk.DISABLED)
         self.pause_position = self.current_position.copy()
+        self.wasatch_dark_button.config(state=tk.NORMAL)
+        self.wasatch_light_button.config(state=tk.NORMAL)
+        for frame in [self.control_frame, self.step_speed_frame]:
+            for child in frame.winfo_children():
+                child.config(state=tk.NORMAL)
+
         self.log("Paused. Take dark reference and optionally light, then press Continue")
 
     def continue_measurement(self):
@@ -1247,4 +1402,9 @@ class MyGUI:
         self.update_map_position(target['X'], target['Y'], target['Z'])
         self.paused = False
         self.continue_button.config(state=tk.DISABLED)
+        self.wasatch_dark_button.config(state=tk.DISABLED)
+        self.wasatch_light_button.config(state=tk.DISABLED)
+        for frame in [self.control_frame, self.step_speed_frame]:
+            for child in frame.winfo_children():
+                child.config(state=tk.DISABLED)
         self.log("Resuming measurement")
