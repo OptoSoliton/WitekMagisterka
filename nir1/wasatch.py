@@ -396,7 +396,12 @@ class Wasatch:
                     self.points_ax.set_xlim(min(xs), max(xs))
                     self.points_ax.set_ylim(min(ys), max(ys))
                     self.points_ax.set_zlim(min(zs), max(zs))
-                self.points_ax.set_box_aspect([1, 1, 1])
+                # keep cube edges and points inside the axes
+                xr = self.points_ax.get_xlim3d()[1] - self.points_ax.get_xlim3d()[0]
+                yr = self.points_ax.get_ylim3d()[1] - self.points_ax.get_ylim3d()[0]
+                zr = self.points_ax.get_zlim3d()[1] - self.points_ax.get_zlim3d()[0]
+                self.points_ax.set_box_aspect([xr, yr, zr])
+
                 self.points_ax.auto_scale_xyz(
                     self.points_ax.get_xlim3d(),
                     self.points_ax.get_ylim3d(),
@@ -409,17 +414,21 @@ class Wasatch:
                 for idx, key in enumerate(['1','2','3','4','5']):
                     pt = self.scan_points.get(key)
                     if pt:
-                        self.points_ax.scatter([pt['X']], [pt['Y']], [pt['Z']],
-                                              color=colors[idx], marker='^',
-                                              label=f'Point {key}')
+                        self.points_ax.scatter(
+                            [pt['X']], [pt['Y']], [pt['Z']],
+                            color=colors[idx], marker='^',
+                            s=60,
+                            label=f'Point {key}'
+                        )
 
             if self.predicted_points:
                 xs, ys, zs = zip(*self.predicted_points)
-                self.points_ax.scatter(xs, ys, zs, c='gray', alpha=0.3, s=10)
+                self.points_ax.scatter(xs, ys, zs, c='gray', alpha=0.3, s=25)
 
             if self.points:
                 xs, ys, zs = zip(*self.points)
-                self.points_ax.scatter(xs, ys, zs, c='red', marker='o', s=20)
+                self.points_ax.scatter(xs, ys, zs, c='red', marker='o', s=40)
+
 
             if None not in self.position:
                 self.points_ax.scatter([self.position[0]], [self.position[1]], [self.position[2]], c='red', s=80, alpha=0.6)
@@ -431,7 +440,11 @@ class Wasatch:
                 handles, labels = self.points_ax.get_legend_handles_labels()
                 if handles:
                     self.points_ax.legend(loc='best')
-            self.points_ax.set_box_aspect([1, 1, 1])
+            xr = self.points_ax.get_xlim3d()[1] - self.points_ax.get_xlim3d()[0]
+            yr = self.points_ax.get_ylim3d()[1] - self.points_ax.get_ylim3d()[0]
+            zr = self.points_ax.get_zlim3d()[1] - self.points_ax.get_zlim3d()[0]
+            self.points_ax.set_box_aspect([xr, yr, zr])
+
             self.points_canvas.draw()
 
         self.points_canvas.get_tk_widget().after(0, _do)
@@ -448,7 +461,8 @@ class Wasatch:
         self.canvas = FigureCanvasTkAgg(self.fig, master=frame)
         self.canvas.draw()
         # use literal string to avoid depending on tkinter alias
-        self.canvas.get_tk_widget().pack(fill="both", expand=False)
+        self.canvas.get_tk_widget().pack(fill="both", expand=True)
+
 
 def signal_handler(signal, frame):
     print('\rInterrupted by Ctrl-C...shutting down', end=' ')
