@@ -31,7 +31,6 @@ class Wasatch:
         self.args = self.parse_args(argv)
         self.logger = applog.MainLogger(self.args.log_level)
         log.info(f"Wasatch.PY version {wasatch.__version__}")
-
         self.root = root
 
         # Figure for spectrum plot (embedded by GUI)
@@ -76,7 +75,6 @@ class Wasatch:
 
         # Also attach to this module's logger so direct ``log`` calls propagate
         # to the same handler.
-
         log.addHandler(logger_handler)
 
     def set_scan_bounds(self, x1, x2, y1, y2, z1, z2, points=None,
@@ -161,7 +159,6 @@ class Wasatch:
         self.bus.update()
         if not self.bus.device_ids:
             log.info("No Wasatch USB spectrometers found.")
-
             return None
 
         device_id = self.bus.device_ids[0]
@@ -183,7 +180,6 @@ class Wasatch:
                 device = OceanDevice(device_id)
 
         log.info("Connecting to %s", device_id)
-
         ok = device.connect()
         if not ok:
             log.critical("connect: can't connect to %s", device_id)
@@ -193,7 +189,6 @@ class Wasatch:
         self.reading_count = 0
         self.init_file()
         log.info("Spectrometer connected")
-
         return device
 
     def run(self, label):
@@ -214,7 +209,6 @@ class Wasatch:
         sleep_ms = self.args.delay_ms - reading_time_ms
         if sleep_ms > 0:
             log.debug(f"sleeping {sleep_ms} ms ({reading_time_ms} ms already passed)")
-
             try:
                 time.sleep(float(sleep_ms) / 1000)
             except Exception:
@@ -326,7 +320,6 @@ class Wasatch:
     def set_integration_time(self, integration_time_ms):
         self.args.integration_time_ms = integration_time_ms
         print(f'Integration time set to {integration_time_ms} ms')
-
 
     def set_scans_to_average(self, scans_to_average):
         self.args.scans_to_average = scans_to_average

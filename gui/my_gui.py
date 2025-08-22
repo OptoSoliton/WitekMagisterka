@@ -410,8 +410,6 @@ class MyGUI:
         self.run_area_button = ttk.Button(self.wasatch_measure_frame, text="Run area", command=self.start_measurement)
         self.run_area_button.grid(row=6, column=1, padx=PADX, pady=PADY)
         ToolTip(self.run_area_button, "Start scan over defined area")
-
-
         self.wasatch_stop_button = ttk.Button(self.wasatch_measure_frame, text="Stop", command=self.stop_measurement)
         self.wasatch_stop_button.grid(row=6, column=2, padx=PADX, pady=PADY)
         
@@ -420,14 +418,16 @@ class MyGUI:
             text="Pause for reference",
             command=self.pause_for_reference
         )
-        self.pause_button.grid(row=7, column=0, columnspan=2, padx=PADX, pady=PADY)        ToolTip(self.pause_button, "Pause scan to take dark and optional light references")
+        self.pause_button.grid(row=7, column=0, columnspan=2, padx=PADX, pady=PADY)
+        ToolTip(self.pause_button, "Pause scan to take dark and optional light references")
+
         self.continue_button = ttk.Button(
             self.wasatch_measure_frame,
             text="Continue",
             command=self.continue_measurement,
             state=tk.DISABLED
-        )
-        self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)        ToolTip(self.continue_button, "Return to saved position and resume scan")
+        )        self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
+        ToolTip(self.continue_button, "Return to saved position and resume scan")
 
 
         self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
@@ -435,7 +435,6 @@ class MyGUI:
             self.wasatch_measure_frame, textvariable=self.estimated_time_var
         )
         self.estimated_time_label.grid(row=8, column=0, columnspan=4, padx=PADX, pady=PADY)
-
 
         # list of widgets disabled during a long scan
         self.disable_on_run = [
@@ -496,42 +495,37 @@ class MyGUI:
             self.controls_frame, text="Spectrum", **FRAME_KWARGS
         )
         self.spectrum_frame.pack(padx=PADX, pady=PADY, anchor='n')
-
         self.wasatch.init_spectrum_plot(self.spectrum_frame)
-        zoom_frame = ttk.Frame(self.spectrum_frame)
-        zoom_frame.pack()
+        nav_frame = ttk.Frame(self.spectrum_frame)
+        nav_frame.pack()
         ttk.Button(
-            zoom_frame,
-
-          #USUN JAKBY CO OD TAD
+            nav_frame,
             text="◀",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1),
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis="x"),
         ).pack(side="left")
         ttk.Button(
-            zoom_frame,
+            nav_frame,
             text="▶",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1),
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis="x"),
         ).pack(side="left")
         ttk.Button(
-            zoom_frame,
+            nav_frame,
             text="▲",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='y'),
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis="y"),
         ).pack(side="left")
         ttk.Button(
-            zoom_frame,
+            nav_frame,
             text="▼",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='y'),
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis="y"),
         ).pack(side="left")
         ttk.Button(
-            zoom_frame,
-          #USUN JAKBY CO DO TAD
-
+            nav_frame,
 
             text="🔍+",
             command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8),
         ).pack(side="left")
         ttk.Button(
-            zoom_frame,
+            nav_frame,
             text="🔍-",
             command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25),
         ).pack(side="left")
@@ -856,7 +850,6 @@ class MyGUI:
         self.root.after(0, _ask)
         return q.get()
 
-
     def move(self, direction):
         step = float(self.get_step())
         speed = self.get_speed()
@@ -873,7 +866,6 @@ class MyGUI:
         elif direction == '\u2192':  # Right (X+)
             self.current_position['X'] += step
             command = f'G1 X{step} F{speed}'
-
         elif direction == 'Up':  # Up (Z+)
             self.current_position['Z'] += step
             command = f'G1 Z{step} F{speed}'
@@ -990,7 +982,6 @@ class MyGUI:
             self.map_ax.get_ylim3d(),
             self.map_ax.get_zlim3d(),
         )
-
         self.map_ax.invert_zaxis()
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
@@ -1093,7 +1084,6 @@ class MyGUI:
             defined = [k for k, v in self.user_positions.items() if v]
             if len(defined) < 2:
                 self.log('Set at least two positions first')
-
                 return
             if not self.serial.connected:
                 self.log('CNC not connected')
@@ -1105,7 +1095,6 @@ class MyGUI:
             self.disable_controls()
             self.log("Starting run-area measurement")
             self.log(self.estimated_time_var.get())
-
             # New thread for measuring
             if not self.measure_thread or not self.measure_thread.is_alive():
                 self.measure_thread = threading.Thread(target=self.measure_and_move)
@@ -1156,7 +1145,6 @@ class MyGUI:
         x1, x2, y1, y2, z1, z2 = self.wasatch.bounds
         start_x, start_y, start_z = x1, y1, z1
         end_x, end_y, end_z = x2, y2, z2
-
         if x1 == x2:
             self.samples_count_x = 1
         if y1 == y2:
@@ -1167,6 +1155,8 @@ class MyGUI:
         step_x = (end_x - start_x) / (self.samples_count_x - 1) if self.samples_count_x > 1 else 0
         step_y = (end_y - start_y) / (self.samples_count_y - 1) if self.samples_count_y > 1 else 0
         step_z = (end_z - start_z) / (self.samples_count_z - 1) if self.samples_count_z > 1 else 0
+
+
         self.log(
             f"Bounds: x1={start_x}, x2={end_x}, y1={start_y}, y2={end_y}, z1={start_z}, z2={end_z}"
         )
@@ -1180,7 +1170,6 @@ class MyGUI:
             f"G1 X{start_x} Y{start_y} Z{start_z} F{self.get_speed()}"
         )
         self.serial.send_gcode(start_cmd)
-
         self.log(
             f"Moving to start position X: {start_x}, Y: {start_y}, Z: {start_z}"
         )
@@ -1192,7 +1181,6 @@ class MyGUI:
         self.log(f"Total scan points: {total_points}")
         self.wasatch.points = []
         self.wasatch.update_points_plot()
-
         current_measure = 0
         measure_count = total_points
 
@@ -1206,7 +1194,6 @@ class MyGUI:
                 for i in range(self.samples_count_x):
                     abs_x = start_x + i * step_x
                     self.log(f"  X step {i+1}/{self.samples_count_x} at X={abs_x}")
-
                     for j in range(self.samples_count_y):
                         if not self.running:
                             break
@@ -1221,7 +1208,6 @@ class MyGUI:
                         self.log(
                             f"Moving to position X: {abs_x}, Y: {abs_y}, Z: {abs_z}"
                         )
-
                         self.waitForCNC()
                         dx = abs(abs_x - self.current_position['X'])
                         dy = abs(abs_y - self.current_position['Y'])
@@ -1260,7 +1246,6 @@ class MyGUI:
                             break
 
                         current_measure += 1
-
                         progress = int((current_measure / measure_count) * 100)
                         self.update_progress(progress)
                         self.log(f"Measure {current_measure} out of {measure_count}.")
@@ -1268,7 +1253,6 @@ class MyGUI:
                     if not self.running:
                         self.log("Stopped.")
                         break
-
 
             self.serial.send_gcode('G91')
             self.running = False
@@ -1383,7 +1367,6 @@ class MyGUI:
         for frame in [self.control_frame, self.step_speed_frame]:
             for child in frame.winfo_children():
                 child.config(state=tk.NORMAL)
-
         self.log("Paused. Take dark reference and optionally light, then press Continue")
 
     def continue_measurement(self):
