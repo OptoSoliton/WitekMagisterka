@@ -18,6 +18,14 @@ from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import logging
 
+# Dark palette shared with the GUI
+APP_BG = '#0F1117'
+TEXT_PRIMARY = '#E6E8EB'
+GRID_COLOR = '#2A2F3A'
+AXIS_COLOR = '#D1D5DB'
+LINE_COLORS = ['#60A5FA', '#34D399', '#F472B6', '#A78BFA',
+               '#F59E0B', '#F87171', '#22D3EE', '#93C5FD']
+
 log = logging.getLogger(__name__)
 
 class Wasatch:
@@ -45,6 +53,13 @@ class Wasatch:
             self.points_ax.set_proj_type('ortho')
         except Exception:
             pass
+        try:
+            from matplotlib import ticker as _ticker
+            self.points_ax.yaxis.set_major_locator(_ticker.MaxNLocator(prune='lower'))
+            self.points_ax.zaxis.set_major_locator(_ticker.MaxNLocator(prune='lower'))
+        except Exception:
+            pass
+
         self.points_canvas = None
 
         self.points = []
@@ -59,31 +74,57 @@ class Wasatch:
 
     def set_dark_mode(self, dark: bool):
         """Toggle matplotlib figures between light and dark themes."""
-        bg = '#1e1e1e' if dark else 'white'
-        fg = 'white' if dark else 'black'
+        if dark:
+            bg = APP_BG
+            fg = TEXT_PRIMARY
+            grid = GRID_COLOR
+            axis = AXIS_COLOR
+            line_colors = LINE_COLORS
+        else:
+            bg = 'white'
+            fg = 'black'
+            grid = '#e0e0e0'
+            axis = 'black'
+            line_colors = None
+
+
         # spectrum plot
         self.fig.patch.set_facecolor(bg)
         self.ax.set_facecolor(bg)
         for spine in self.ax.spines.values():
-            spine.set_color(fg)
+            spine.set_color(axis)
         self.ax.tick_params(colors=fg)
+        self.ax.xaxis.label.set_color(axis)
+        self.ax.yaxis.label.set_color(axis)
+        if line_colors:
+            self.ax.set_prop_cycle(color=line_colors)
+        self.ax.grid(color=grid, alpha=0.25)
+
+
         # 3D points plot
         self.points_fig.patch.set_facecolor(bg)
         self.points_ax.set_facecolor(bg)
         try:
-            self.points_ax.w_xaxis.set_pane_color((0.1176, 0.1176, 0.1176, 1) if dark else (1, 1, 1, 1))
-            self.points_ax.w_yaxis.set_pane_color((0.1176, 0.1176, 0.1176, 1) if dark else (1, 1, 1, 1))
-            self.points_ax.w_zaxis.set_pane_color((0.1176, 0.1176, 0.1176, 1) if dark else (1, 1, 1, 1))
+            self.points_ax.w_xaxis.set_pane_color((*self._hex_to_rgb(grid), 0.25))
+            self.points_ax.w_yaxis.set_pane_color((*self._hex_to_rgb(grid), 0.25))
+            self.points_ax.w_zaxis.set_pane_color((*self._hex_to_rgb(grid), 0.25))
         except Exception:
             pass
         self.points_ax.tick_params(colors=fg)
-        self.points_ax.xaxis.label.set_color(fg)
-        self.points_ax.yaxis.label.set_color(fg)
-        self.points_ax.zaxis.label.set_color(fg)
+        self.points_ax.xaxis.label.set_color(axis)
+        self.points_ax.yaxis.label.set_color(axis)
+        self.points_ax.zaxis.label.set_color(axis)
+        self.points_ax.grid(color=grid, alpha=0.25)
+
         if self.canvas:
             self.canvas.draw_idle()
         if self.points_canvas:
             self.points_canvas.draw_idle()
+
+    @staticmethod
+    def _hex_to_rgb(hex_color):
+        hex_color = hex_color.lstrip('#')
+        return tuple(int(hex_color[i:i+2], 16)/255 for i in (0, 2, 4))
 
     def set_logger_handler(self, logger_handler):
         """Attach an additional handler to the Wasatch logger.
@@ -510,8 +551,6 @@ class Wasatch:
         # use literal string to avoid depending on tkinter alias
         self.fig.subplots_adjust(bottom=0.2)
         self.canvas.get_tk_widget().pack(fill="both", expand=True)
-
-
 def signal_handler(signal, frame):
     print('\rInterrupted by Ctrl-C...shutting down', end=' ')
     clean_shutdown()
