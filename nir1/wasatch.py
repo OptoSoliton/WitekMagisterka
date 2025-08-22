@@ -57,6 +57,34 @@ class Wasatch:
         self.marked_dots = []
         self.marked_labels = []
 
+    def set_dark_mode(self, dark: bool):
+        """Toggle matplotlib figures between light and dark themes."""
+        bg = '#1e1e1e' if dark else 'white'
+        fg = 'white' if dark else 'black'
+        # spectrum plot
+        self.fig.patch.set_facecolor(bg)
+        self.ax.set_facecolor(bg)
+        for spine in self.ax.spines.values():
+            spine.set_color(fg)
+        self.ax.tick_params(colors=fg)
+        # 3D points plot
+        self.points_fig.patch.set_facecolor(bg)
+        self.points_ax.set_facecolor(bg)
+        try:
+            self.points_ax.w_xaxis.set_pane_color((0.1176, 0.1176, 0.1176, 1) if dark else (1, 1, 1, 1))
+            self.points_ax.w_yaxis.set_pane_color((0.1176, 0.1176, 0.1176, 1) if dark else (1, 1, 1, 1))
+            self.points_ax.w_zaxis.set_pane_color((0.1176, 0.1176, 0.1176, 1) if dark else (1, 1, 1, 1))
+        except Exception:
+            pass
+        self.points_ax.tick_params(colors=fg)
+        self.points_ax.xaxis.label.set_color(fg)
+        self.points_ax.yaxis.label.set_color(fg)
+        self.points_ax.zaxis.label.set_color(fg)
+        if self.canvas:
+            self.canvas.draw_idle()
+        if self.points_canvas:
+            self.points_canvas.draw_idle()
+
     def set_logger_handler(self, logger_handler):
         """Attach an additional handler to the Wasatch logger.
 

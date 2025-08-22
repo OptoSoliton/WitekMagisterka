@@ -13,6 +13,12 @@ PADX = 3
 PADY = 2
 FRAME_KWARGS = dict(padding=(PADX, PADY))
 
+# color palettes for light and dark modes
+LIGHT_BG = '#f0f0f0'
+LIGHT_FG = '#000000'
+DARK_BG = '#2e2e2e'
+DARK_FG = '#ffffff'
+
 
 class TkLogHandler(logging.Handler):
     """Forward logging records to the GUI log window."""
@@ -82,6 +88,10 @@ class MyGUI:
             lambda e: self.canvas.configure(scrollregion=self.canvas.bbox('all'))
         )
 
+        self.style = ttk.Style(self.root)
+        self.style.theme_use('clam')
+        self.dark_mode = False
+
         # Actual XYZ position
         self.current_position = {'X': 0, 'Y': 0, 'Z': 0}
         # Positions 1-5 used to define scan volume
@@ -111,6 +121,8 @@ class MyGUI:
         self.marked_labels_head = []
 
         self.setup_ui()
+        self.apply_theme()
+        self.wasatch.set_dark_mode(self.dark_mode)
         # forward Wasatch logger messages to GUI log
         handler = TkLogHandler(self)
         self.wasatch.set_logger_handler(handler)
@@ -526,6 +538,10 @@ class MyGUI:
         self.help_button = ttk.Button(self.right_frame, text="Help", command=self.show_help)
         self.help_button.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="ew")
 
+        self.dark_button = ttk.Button(self.right_frame, text="Dark Mode", command=self.toggle_dark_mode)
+        self.dark_button.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="ew")
+        ToolTip(self.dark_button, "Toggle dark theme")
+
         self.calculate_predicted_points()
 
     def disable_controls(self):
@@ -562,6 +578,28 @@ class MyGUI:
             "- Hover over buttons for additional tips."
         )
         messagebox.showinfo("Help", msg)
+
+    def toggle_dark_mode(self):
+        self.dark_mode = not self.dark_mode
+        self.apply_theme()
+        self.wasatch.set_dark_mode(self.dark_mode)
+        self.dark_button.config(text="Light Mode" if self.dark_mode else "Dark Mode")
+
+    def apply_theme(self):
+        bg = DARK_BG if self.dark_mode else LIGHT_BG
+        fg = DARK_FG if self.dark_mode else LIGHT_FG
+        frame_bg = '#3e3e3e' if self.dark_mode else LIGHT_BG
+        self.root.configure(bg=bg)
+        self.canvas.configure(bg=bg)
+        self.style.configure('TFrame', background=bg)
+        self.style.configure('TLabelframe', background=bg, foreground=fg)
+        self.style.configure('TLabelframe.Label', background=bg, foreground=fg)
+        self.style.configure('TLabel', background=bg, foreground=fg)
+        self.style.configure('TButton', background=frame_bg, foreground=fg)
+        self.style.configure('TEntry', fieldbackground=frame_bg, foreground=fg)
+        self.style.configure('TCombobox', fieldbackground=frame_bg, foreground=fg)
+        self.marked_list.config(bg=frame_bg, fg=fg, selectbackground='#555555', selectforeground=fg)
+        self.log_text.config(bg=frame_bg, fg=fg, insertbackground=fg)
 
     def update_progress(self, progress):
         def _do():
