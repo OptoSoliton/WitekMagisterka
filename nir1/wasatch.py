@@ -401,6 +401,7 @@ class Wasatch:
                 yr = self.points_ax.get_ylim3d()[1] - self.points_ax.get_ylim3d()[0]
                 zr = self.points_ax.get_zlim3d()[1] - self.points_ax.get_zlim3d()[0]
                 self.points_ax.set_box_aspect([xr, yr, zr])
+
                 self.points_ax.auto_scale_xyz(
                     self.points_ax.get_xlim3d(),
                     self.points_ax.get_ylim3d(),
@@ -428,6 +429,7 @@ class Wasatch:
                 xs, ys, zs = zip(*self.points)
                 self.points_ax.scatter(xs, ys, zs, c='red', marker='o', s=40)
 
+
             if None not in self.position:
                 self.points_ax.scatter([self.position[0]], [self.position[1]], [self.position[2]], c='red', s=80, alpha=0.6)
 
@@ -442,6 +444,7 @@ class Wasatch:
             yr = self.points_ax.get_ylim3d()[1] - self.points_ax.get_ylim3d()[0]
             zr = self.points_ax.get_zlim3d()[1] - self.points_ax.get_zlim3d()[0]
             self.points_ax.set_box_aspect([xr, yr, zr])
+
             self.points_canvas.draw()
 
         self.points_canvas.get_tk_widget().after(0, _do)
@@ -459,6 +462,7 @@ class Wasatch:
         self.canvas.draw()
         # use literal string to avoid depending on tkinter alias
         self.canvas.get_tk_widget().pack(fill="both", expand=True)
+
 
 def signal_handler(signal, frame):
     print('\rInterrupted by Ctrl-C...shutting down', end=' ')
