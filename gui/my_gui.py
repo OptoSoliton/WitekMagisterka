@@ -220,6 +220,7 @@ class MyGUI:
         )
         self.set_button_5.grid(row=0, column=2, rowspan=2, padx=(PADX*3, PADX), pady=PADY)
 
+
         # goto buttons aligned with the set buttons
         self.goto_button_1 = ttk.Button(self.position_frame, text="Go to 1", command=lambda: self.goto_position(1))
         self.goto_button_1.grid(row=0, column=3, padx=PADX, pady=PADY)
@@ -376,7 +377,7 @@ class MyGUI:
             state=tk.DISABLED,
         )
         self.wasatch_light_button.grid(row=3, column=2, columnspan=2, padx=PADX, pady=PADY)
-        ToolTip(self.wasatch_light_button, "Record light reference at current position")
+        ToolTip(self.wasatch_light_button, "Record light reference at current position"
 
         # Progress bar
         self.progress_bar = ttk.Progressbar(self.wasatch_measure_frame, orient="horizontal", length=300,  mode="determinate")
@@ -410,11 +411,19 @@ class MyGUI:
         )
         self.pause_button.grid(row=7, column=0, columnspan=2, padx=PADX, pady=PADY)
         ToolTip(self.pause_button, "Pause scan to take dark and optional light references")
+
         self.continue_button = ttk.Button(
             self.wasatch_measure_frame,
             text="Continue",
             command=self.continue_measurement,
             state=tk.DISABLED
+        )        self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
+        ToolTip(self.continue_button, "Return to saved position and resume scan")
+
+
+        self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
+        self.estimated_time_label = ttk.Label(
+            self.wasatch_measure_frame, textvariable=self.estimated_time_var
         )
         self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
         ToolTip(self.continue_button, "Return to saved position and resume scan")
@@ -486,6 +495,7 @@ class MyGUI:
         self.wasatch.init_spectrum_plot(self.spectrum_frame)
         nav_frame = ttk.Frame(self.spectrum_frame)
         nav_frame.pack(pady=(0, PADY))
+
         ttk.Button(
             nav_frame,
             text="◀",
@@ -516,7 +526,6 @@ class MyGUI:
             text="🔍-",
             command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25),
         ).pack(side="left")
-
         self.help_button = ttk.Button(self.right_frame, text="Help", command=self.show_help)
         self.help_button.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="ew")
 
@@ -582,6 +591,7 @@ class MyGUI:
             yr = ax.get_ylim3d()[1] - ax.get_ylim3d()[0]
             zr = ax.get_zlim3d()[1] - ax.get_zlim3d()[0]
             ax.set_box_aspect([xr, yr, zr])
+
         else:
             xlim = ax.get_xlim()
             ylim = ax.get_ylim()
@@ -1136,6 +1146,7 @@ class MyGUI:
         step_x = (end_x - start_x) / (self.samples_count_x - 1) if self.samples_count_x > 1 else 0
         step_y = (end_y - start_y) / (self.samples_count_y - 1) if self.samples_count_y > 1 else 0
         step_z = (end_z - start_z) / (self.samples_count_z - 1) if self.samples_count_z > 1 else 0
+
 
         self.log(
             f"Bounds: x1={start_x}, x2={end_x}, y1={start_y}, y2={end_y}, z1={start_z}, z2={end_z}"
