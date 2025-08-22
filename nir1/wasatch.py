@@ -54,6 +54,36 @@ class Wasatch:
         self.bounds = None
         self.reading_count = 0
         self.points_zoomed = False
+        self.marked_dots = []
+        self.marked_labels = []
+
+    def set_dark_mode(self, dark: bool):
+        """Toggle matplotlib figures between light and dark themes."""
+        bg = '#1e1e1e' if dark else 'white'
+        fg = 'white' if dark else 'black'
+        # spectrum plot
+        self.fig.patch.set_facecolor(bg)
+        self.ax.set_facecolor(bg)
+        for spine in self.ax.spines.values():
+            spine.set_color(fg)
+        self.ax.tick_params(colors=fg)
+        # 3D points plot
+        self.points_fig.patch.set_facecolor(bg)
+        self.points_ax.set_facecolor(bg)
+        try:
+            self.points_ax.w_xaxis.set_pane_color((0.1176, 0.1176, 0.1176, 1) if dark else (1, 1, 1, 1))
+            self.points_ax.w_yaxis.set_pane_color((0.1176, 0.1176, 0.1176, 1) if dark else (1, 1, 1, 1))
+            self.points_ax.w_zaxis.set_pane_color((0.1176, 0.1176, 0.1176, 1) if dark else (1, 1, 1, 1))
+        except Exception:
+            pass
+        self.points_ax.tick_params(colors=fg)
+        self.points_ax.xaxis.label.set_color(fg)
+        self.points_ax.yaxis.label.set_color(fg)
+        self.points_ax.zaxis.label.set_color(fg)
+        if self.canvas:
+            self.canvas.draw_idle()
+        if self.points_canvas:
+            self.points_canvas.draw_idle()
 
     def set_logger_handler(self, logger_handler):
         """Attach an additional handler to the Wasatch logger.
@@ -401,7 +431,6 @@ class Wasatch:
                 yr = self.points_ax.get_ylim3d()[1] - self.points_ax.get_ylim3d()[0]
                 zr = self.points_ax.get_zlim3d()[1] - self.points_ax.get_zlim3d()[0]
                 self.points_ax.set_box_aspect([xr, yr, zr])
-
                 self.points_ax.auto_scale_xyz(
                     self.points_ax.get_xlim3d(),
                     self.points_ax.get_ylim3d(),
@@ -429,7 +458,6 @@ class Wasatch:
                 xs, ys, zs = zip(*self.points)
                 self.points_ax.scatter(xs, ys, zs, c='red', marker='o', s=40)
 
-
             if None not in self.position:
                 self.points_ax.scatter([self.position[0]], [self.position[1]], [self.position[2]], c='red', s=80, alpha=0.6)
 
@@ -444,7 +472,26 @@ class Wasatch:
             yr = self.points_ax.get_ylim3d()[1] - self.points_ax.get_ylim3d()[0]
             zr = self.points_ax.get_zlim3d()[1] - self.points_ax.get_zlim3d()[0]
             self.points_ax.set_box_aspect([xr, yr, zr])
+            self.points_canvas.draw()
 
+        self.points_canvas.get_tk_widget().after(0, _do)
+
+    def update_marked_points(self, positions):
+        if not self.points_canvas:
+            return
+
+        def _do():
+            for d in self.marked_dots:
+                d.remove()
+            for l in self.marked_labels:
+                l.remove()
+            self.marked_dots = []
+            self.marked_labels = []
+            for pos in positions:
+                d = self.points_ax.scatter([pos['X']], [pos['Y']], [pos['Z']], color='red', marker='x')
+                l = self.points_ax.text(pos['X'], pos['Y'], pos['Z'], str(pos['index']), color='red')
+                self.marked_dots.append(d)
+                self.marked_labels.append(l)
             self.points_canvas.draw()
 
         self.points_canvas.get_tk_widget().after(0, _do)
@@ -461,6 +508,7 @@ class Wasatch:
         self.canvas = FigureCanvasTkAgg(self.fig, master=frame)
         self.canvas.draw()
         # use literal string to avoid depending on tkinter alias
+        self.fig.subplots_adjust(bottom=0.2)
         self.canvas.get_tk_widget().pack(fill="both", expand=True)
 
 

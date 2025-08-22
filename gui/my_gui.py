@@ -13,6 +13,13 @@ PADX = 3
 PADY = 2
 FRAME_KWARGS = dict(padding=(PADX, PADY))
 
+# color palettes for light and dark modes
+LIGHT_BG = '#f0f0f0'
+LIGHT_FG = '#000000'
+DARK_BG = '#2e2e2e'
+DARK_FG = '#ffffff'
+
+
 
 class TkLogHandler(logging.Handler):
     """Forward logging records to the GUI log window."""
@@ -82,6 +89,10 @@ class MyGUI:
             lambda e: self.canvas.configure(scrollregion=self.canvas.bbox('all'))
         )
 
+        self.style = ttk.Style(self.root)
+        self.style.theme_use('clam')
+        self.dark_mode = False
+
         # Actual XYZ position
         self.current_position = {'X': 0, 'Y': 0, 'Z': 0}
         # Positions 1-5 used to define scan volume
@@ -106,9 +117,14 @@ class MyGUI:
         self.samples_count_z = 1
 
         self.output_file = None
-        self.map_zoomed = False
+        self.marked_positions = []
+        self.marked_dots_head = []
+        self.marked_labels_head = []
 
         self.setup_ui()
+        self.apply_theme()
+        self.wasatch.set_dark_mode(self.dark_mode)
+
         # forward Wasatch logger messages to GUI log
         handler = TkLogHandler(self)
         self.wasatch.set_logger_handler(handler)
@@ -131,6 +147,12 @@ class MyGUI:
         self.controls_frame.grid(row=0, column=0, sticky='nw')
         self.plots_frame = ttk.Frame(self.right_frame)
         self.plots_frame.grid(row=0, column=1, sticky='ne')
+        # list of marked positions on the far right
+        self.marks_frame = ttk.LabelFrame(self.container, text="Marked positions", **FRAME_KWARGS)
+        self.marks_frame.grid(row=0, column=2, sticky='nw')
+        self.marked_list = tk.Listbox(self.marks_frame, width=25)
+        self.marked_list.pack(padx=PADX, pady=PADY)
+
 
         # Serial connection frame
         self.serial_connection_frame = ttk.LabelFrame(self.left_frame, text="CNC serial connection", **FRAME_KWARGS)
@@ -377,7 +399,7 @@ class MyGUI:
             state=tk.DISABLED,
         )
         self.wasatch_light_button.grid(row=3, column=2, columnspan=2, padx=PADX, pady=PADY)
-        ToolTip(self.wasatch_light_button, "Record light reference at current position"
+        ToolTip(self.wasatch_light_button, "Record light reference at current position")
 
         # Progress bar
         self.progress_bar = ttk.Progressbar(self.wasatch_measure_frame, orient="horizontal", length=300,  mode="determinate")
@@ -411,7 +433,6 @@ class MyGUI:
         )
         self.pause_button.grid(row=7, column=0, columnspan=2, padx=PADX, pady=PADY)
         ToolTip(self.pause_button, "Pause scan to take dark and optional light references")
-
         self.continue_button = ttk.Button(
             self.wasatch_measure_frame,
             text="Continue",
@@ -432,7 +453,20 @@ class MyGUI:
         self.estimated_time_label = ttk.Label(
             self.wasatch_measure_frame, textvariable=self.estimated_time_var
         )
+        self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
+        ToolTip(self.continue_button, "Return to saved position and resume scan")
+
+        self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
+        self.estimated_time_label = ttk.Label(
+            self.wasatch_measure_frame, textvariable=self.estimated_time_var
+        )
         self.estimated_time_label.grid(row=8, column=0, columnspan=4, padx=PADX, pady=PADY)
+
+        self.time_calc_progress = ttk.Progressbar(
+            self.wasatch_measure_frame, orient="horizontal", length=300, mode="determinate"
+        )
+        self.time_calc_progress.grid(row=9, column=0, columnspan=4, padx=PADX, pady=PADY)
+
 
         # list of widgets disabled during a long scan
         self.disable_on_run = [
@@ -469,14 +503,8 @@ class MyGUI:
         self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
         self.position_label = ttk.Label(self.map_frame, text="X:0 Y:0 Z:0")
         self.position_label.pack()
-        zoom_frame = ttk.Frame(self.map_frame)
-        zoom_frame.pack()
-        ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.map_ax, self.map_canvas, 0.8, True)).pack(side="left")
-        ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.map_ax, self.map_canvas, 1.25, True)).pack(side="left")
-        self.head_dot = None
-        self.volume_lines = []
-        self.point_dots = []
-        self.point_labels = []
+        ttk.Button(self.map_frame, text="Mark position", command=self.mark_current_position).pack(pady=(0, PADY))
+
 
         # Points preview under head position
         self.points_frame = ttk.LabelFrame(self.plots_frame, text="Scan points", **FRAME_KWARGS)
@@ -526,8 +554,14 @@ class MyGUI:
             text="🔍-",
             command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25),
         ).pack(side="left")
+
         self.help_button = ttk.Button(self.right_frame, text="Help", command=self.show_help)
         self.help_button.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="ew")
+
+        self.dark_button = ttk.Button(self.right_frame, text="Dark Mode", command=self.toggle_dark_mode)
+        self.dark_button.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="ew")
+        ToolTip(self.dark_button, "Toggle dark theme")
+
 
         self.calculate_predicted_points()
 
@@ -566,11 +600,39 @@ class MyGUI:
         )
         messagebox.showinfo("Help", msg)
 
+    def toggle_dark_mode(self):
+        self.dark_mode = not self.dark_mode
+        self.apply_theme()
+        self.wasatch.set_dark_mode(self.dark_mode)
+        self.dark_button.config(text="Light Mode" if self.dark_mode else "Dark Mode")
+
+    def apply_theme(self):
+        bg = DARK_BG if self.dark_mode else LIGHT_BG
+        fg = DARK_FG if self.dark_mode else LIGHT_FG
+        frame_bg = '#3e3e3e' if self.dark_mode else LIGHT_BG
+        self.root.configure(bg=bg)
+        self.canvas.configure(bg=bg)
+        self.style.configure('TFrame', background=bg)
+        self.style.configure('TLabelframe', background=bg, foreground=fg)
+        self.style.configure('TLabelframe.Label', background=bg, foreground=fg)
+        self.style.configure('TLabel', background=bg, foreground=fg)
+        self.style.configure('TButton', background=frame_bg, foreground=fg)
+        self.style.configure('TEntry', fieldbackground=frame_bg, foreground=fg)
+        self.style.configure('TCombobox', fieldbackground=frame_bg, foreground=fg)
+        self.marked_list.config(bg=frame_bg, fg=fg, selectbackground='#555555', selectforeground=fg)
+        self.log_text.config(bg=frame_bg, fg=fg, insertbackground=fg)
+
     def update_progress(self, progress):
         def _do():
             self.progress_bar["value"] = progress
             self.progress_label['text'] = f"{progress} %"
         self.root.after(0, _do)
+
+    def update_time_calc_progress(self, progress):
+        def _do():
+            self.time_calc_progress["value"] = progress
+        self.root.after(0, _do)
+
 
     def zoom_axes(self, ax, canvas, factor, is3d=False):
         if is3d:
@@ -602,9 +664,7 @@ class MyGUI:
             ax.set_xlim(xmid - xspan, xmid + xspan)
             ax.set_ylim(ymid - yspan, ymid + yspan)
         canvas.draw_idle()
-        if ax is self.map_ax:
-            self.map_zoomed = True
-        elif ax is self.wasatch.points_ax:
+        if ax is self.wasatch.points_ax:
             self.wasatch.points_zoomed = True
 
     def pan_axes(self, ax, canvas, frac, axis='x'):
@@ -723,7 +783,8 @@ class MyGUI:
                 count_x,
                 count_y,
                 count_z,
-                progress_cb=self.update_progress,
+                progress_cb=self.update_time_calc_progress,
+
                 log_cb=self.log,
             )
             self.log("Points ready")
@@ -733,6 +794,8 @@ class MyGUI:
             self.wasatch.update_points_plot()
 
     def update_time_estimate(self):
+        self.update_time_calc_progress(0)
+
         try:
             count_x = int(self.wasatch_samples_countX_entry.get())
             count_y = int(self.wasatch_samples_countY_entry.get())
@@ -805,6 +868,8 @@ class MyGUI:
         self.estimated_time_var.set(
             f"Estimated time: {total_ms/1000:.1f} s"
         )
+        self.update_time_calc_progress(100)
+
 
     def connect_spectrometer(self):
         self.log("Connecting spectrometer...")
@@ -893,48 +958,63 @@ class MyGUI:
             z = self.current_position['Z']
 
         def _do():
+            self.current_position['X'] = x
+            self.current_position['Y'] = y
+            self.current_position['Z'] = z
             self.position_label.config(text=f"X:{x:.1f} Y:{y:.1f} Z:{z:.1f}")
-
-            if self.head_dot:
-                self.head_dot.remove()
-            self.head_dot = self.map_ax.scatter([x], [y], [z], c='red', s=80, alpha=0.6)
-
             self.wasatch.position = (x, y, z)
             self.update_volume_display()
-            self.map_canvas.draw()
-            self.wasatch.update_points_plot()
+        self.wasatch.update_points_plot()
 
         self.root.after(0, _do)
+
+    def mark_current_position(self):
+        idx = len(self.marked_positions) + 1
+        pos = {
+            'X': self.current_position['X'],
+            'Y': self.current_position['Y'],
+            'Z': self.current_position['Z'],
+            'index': idx,
+        }
+        self.marked_positions.append(pos)
+        self.marked_list.insert(tk.END, f"{idx}: X{pos['X']:.2f} Y{pos['Y']:.2f} Z{pos['Z']:.2f}")
+        self.update_volume_display()
+
 
     def update_volume_display(self):
         import itertools
 
-        # clear previous drawings
-        for line in self.volume_lines:
-            line.remove()
-        self.volume_lines = []
-        for dot in self.point_dots:
-            dot.remove()
-        self.point_dots = []
-        for label in self.point_labels:
-            label.remove()
-        self.point_labels = []
+        self.map_ax.cla()
+        try:
+            self.map_ax.set_proj_type('ortho')
+        except Exception:
+            pass
 
-        # draw reference points if any
-        colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
+
         xs = []
         ys = []
         zs = []
+
+        # current head position
+        x = self.current_position['X']
+        y = self.current_position['Y']
+        z = self.current_position['Z']
+        self.map_ax.scatter([x], [y], [z], c='red', s=80, alpha=0.6)
+        xs.append(x)
+        ys.append(y)
+        zs.append(z)
+
+        # draw reference points if any
+        colors = ['blue', 'green', 'magenta', 'orange', 'cyan']
         for idx, key in enumerate(['1','2','3','4','5']):
             pt = self.user_positions.get(key)
             if pt:
+                self.map_ax.scatter([pt['X']], [pt['Y']], [pt['Z']], color=colors[idx])
+                self.map_ax.text(pt['X'], pt['Y'], pt['Z'], f"{key}")
                 xs.append(pt['X'])
                 ys.append(pt['Y'])
                 zs.append(pt['Z'])
-                dot = self.map_ax.scatter([pt['X']], [pt['Y']], [pt['Z']], color=colors[idx], marker='o')
-                label = self.map_ax.text(pt['X'], pt['Y'], pt['Z'], f"{key}")
-                self.point_dots.append(dot)
-                self.point_labels.append(label)
+
 
         # draw volume if all bounding points are set
         if all(self.user_positions.get(k) for k in ['1','2','4','5']):
@@ -954,28 +1034,32 @@ class MyGUI:
                 (0,4),(1,5),(2,6),(3,7)
             ]
             for e in edges:
-                line = self.map_ax.plot(
+                self.map_ax.plot(
                     [corners[e[0]][0], corners[e[1]][0]],
                     [corners[e[0]][1], corners[e[1]][1]],
                     [corners[e[0]][2], corners[e[1]][2]],
                     color='black'
-                )[0]
-                self.volume_lines.append(line)
+                )
+
+        # draw marked positions
+        for pos in self.marked_positions:
+            self.map_ax.scatter([pos['X']], [pos['Y']], [pos['Z']], color='red', marker='x')
+            self.map_ax.text(pos['X'], pos['Y'], pos['Z'], str(pos['index']), color='red')
+            xs.append(pos['X'])
+            ys.append(pos['Y'])
+            zs.append(pos['Z'])
 
         if xs and ys and zs and not self.map_zoomed:
             self.map_ax.set_xlim(min(xs), max(xs))
             self.map_ax.set_ylim(min(ys), max(ys))
             self.map_ax.set_zlim(min(zs), max(zs))
         self.map_ax.set_box_aspect([1, 1, 1])
-        self.map_ax.auto_scale_xyz(
-            self.map_ax.get_xlim3d(),
-            self.map_ax.get_ylim3d(),
-            self.map_ax.get_zlim3d(),
-        )
         self.map_ax.invert_zaxis()
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
         self.map_ax.set_zlabel('Z')
+        self.map_canvas.draw()
+        self.wasatch.update_marked_points(self.marked_positions)
 
 
     def set_position(self, position_number):
@@ -1120,7 +1204,6 @@ class MyGUI:
         self.update_progress(0)
         self.wasatch.points = []
         self.wasatch.update_points_plot()
-        self.map_zoomed = False
         self.wasatch.points_zoomed = False
         if getattr(self.serial, 'connected', False):
             self.serial.send_gcode('G91')
@@ -1146,7 +1229,6 @@ class MyGUI:
         step_x = (end_x - start_x) / (self.samples_count_x - 1) if self.samples_count_x > 1 else 0
         step_y = (end_y - start_y) / (self.samples_count_y - 1) if self.samples_count_y > 1 else 0
         step_z = (end_z - start_z) / (self.samples_count_z - 1) if self.samples_count_z > 1 else 0
-
 
         self.log(
             f"Bounds: x1={start_x}, x2={end_x}, y1={start_y}, y2={end_y}, z1={start_z}, z2={end_z}"
