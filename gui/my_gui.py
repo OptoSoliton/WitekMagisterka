@@ -20,6 +20,7 @@ DARK_BG = '#2e2e2e'
 DARK_FG = '#ffffff'
 
 
+
 class TkLogHandler(logging.Handler):
     """Forward logging records to the GUI log window."""
 
@@ -123,6 +124,7 @@ class MyGUI:
         self.setup_ui()
         self.apply_theme()
         self.wasatch.set_dark_mode(self.dark_mode)
+
         # forward Wasatch logger messages to GUI log
         handler = TkLogHandler(self)
         self.wasatch.set_logger_handler(handler)
@@ -145,12 +147,12 @@ class MyGUI:
         self.controls_frame.grid(row=0, column=0, sticky='nw')
         self.plots_frame = ttk.Frame(self.right_frame)
         self.plots_frame.grid(row=0, column=1, sticky='ne')
-
         # list of marked positions on the far right
         self.marks_frame = ttk.LabelFrame(self.container, text="Marked positions", **FRAME_KWARGS)
         self.marks_frame.grid(row=0, column=2, sticky='nw')
         self.marked_list = tk.Listbox(self.marks_frame, width=25)
         self.marked_list.pack(padx=PADX, pady=PADY)
+
 
         # Serial connection frame
         self.serial_connection_frame = ttk.LabelFrame(self.left_frame, text="CNC serial connection", **FRAME_KWARGS)
@@ -239,6 +241,7 @@ class MyGUI:
             command=lambda: self.set_position(5),
         )
         self.set_button_5.grid(row=0, column=2, rowspan=2, padx=(PADX*3, PADX), pady=PADY)
+
 
         # goto buttons aligned with the set buttons
         self.goto_button_1 = ttk.Button(self.position_frame, text="Go to 1", command=lambda: self.goto_position(1))
@@ -435,6 +438,20 @@ class MyGUI:
             text="Continue",
             command=self.continue_measurement,
             state=tk.DISABLED
+        )        self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
+        ToolTip(self.continue_button, "Return to saved position and resume scan")
+
+
+        self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
+        self.estimated_time_label = ttk.Label(
+            self.wasatch_measure_frame, textvariable=self.estimated_time_var
+        )
+        self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
+        ToolTip(self.continue_button, "Return to saved position and resume scan")
+
+        self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
+        self.estimated_time_label = ttk.Label(
+            self.wasatch_measure_frame, textvariable=self.estimated_time_var
         )
         self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
         ToolTip(self.continue_button, "Return to saved position and resume scan")
@@ -449,6 +466,7 @@ class MyGUI:
             self.wasatch_measure_frame, orient="horizontal", length=300, mode="determinate"
         )
         self.time_calc_progress.grid(row=9, column=0, columnspan=4, padx=PADX, pady=PADY)
+
 
         # list of widgets disabled during a long scan
         self.disable_on_run = [
@@ -487,6 +505,7 @@ class MyGUI:
         self.position_label.pack()
         ttk.Button(self.map_frame, text="Mark position", command=self.mark_current_position).pack(pady=(0, PADY))
 
+
         # Points preview under head position
         self.points_frame = ttk.LabelFrame(self.plots_frame, text="Scan points", **FRAME_KWARGS)
         self.points_frame.pack(padx=PADX, pady=PADY)
@@ -504,6 +523,7 @@ class MyGUI:
         self.wasatch.init_spectrum_plot(self.spectrum_frame)
         nav_frame = ttk.Frame(self.spectrum_frame)
         nav_frame.pack(pady=(0, PADY))
+
         ttk.Button(
             nav_frame,
             text="◀",
@@ -541,6 +561,7 @@ class MyGUI:
         self.dark_button = ttk.Button(self.right_frame, text="Dark Mode", command=self.toggle_dark_mode)
         self.dark_button.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="ew")
         ToolTip(self.dark_button, "Toggle dark theme")
+
 
         self.calculate_predicted_points()
 
@@ -612,6 +633,7 @@ class MyGUI:
             self.time_calc_progress["value"] = progress
         self.root.after(0, _do)
 
+
     def zoom_axes(self, ax, canvas, factor, is3d=False):
         if is3d:
             xlim = ax.get_xlim3d()
@@ -631,6 +653,7 @@ class MyGUI:
             yr = ax.get_ylim3d()[1] - ax.get_ylim3d()[0]
             zr = ax.get_zlim3d()[1] - ax.get_zlim3d()[0]
             ax.set_box_aspect([xr, yr, zr])
+
         else:
             xlim = ax.get_xlim()
             ylim = ax.get_ylim()
@@ -751,7 +774,6 @@ class MyGUI:
             self.wasatch_samples_countZ_entry.insert(0, '1')
             count_z = 1
         try:
-            self.update_time_calc_progress(0)
             self.wasatch.points_zoomed = False
             self.wasatch.set_scan_bounds(
                 x1, x2,
@@ -762,6 +784,7 @@ class MyGUI:
                 count_y,
                 count_z,
                 progress_cb=self.update_time_calc_progress,
+
                 log_cb=self.log,
             )
             self.log("Points ready")
@@ -772,6 +795,7 @@ class MyGUI:
 
     def update_time_estimate(self):
         self.update_time_calc_progress(0)
+
         try:
             count_x = int(self.wasatch_samples_countX_entry.get())
             count_y = int(self.wasatch_samples_countY_entry.get())
@@ -845,6 +869,7 @@ class MyGUI:
             f"Estimated time: {total_ms/1000:.1f} s"
         )
         self.update_time_calc_progress(100)
+
 
     def connect_spectrometer(self):
         self.log("Connecting spectrometer...")
@@ -955,6 +980,7 @@ class MyGUI:
         self.marked_list.insert(tk.END, f"{idx}: X{pos['X']:.2f} Y{pos['Y']:.2f} Z{pos['Z']:.2f}")
         self.update_volume_display()
 
+
     def update_volume_display(self):
         import itertools
 
@@ -963,6 +989,7 @@ class MyGUI:
             self.map_ax.set_proj_type('ortho')
         except Exception:
             pass
+
 
         xs = []
         ys = []
@@ -987,6 +1014,7 @@ class MyGUI:
                 xs.append(pt['X'])
                 ys.append(pt['Y'])
                 zs.append(pt['Z'])
+
 
         # draw volume if all bounding points are set
         if all(self.user_positions.get(k) for k in ['1','2','4','5']):
@@ -1021,7 +1049,7 @@ class MyGUI:
             ys.append(pos['Y'])
             zs.append(pos['Z'])
 
-        if xs and ys and zs:
+        if xs and ys and zs and not self.map_zoomed:
             self.map_ax.set_xlim(min(xs), max(xs))
             self.map_ax.set_ylim(min(ys), max(ys))
             self.map_ax.set_zlim(min(zs), max(zs))
@@ -1035,6 +1063,7 @@ class MyGUI:
 
 
     def set_position(self, position_number):
+        self.map_zoomed = False
         self.user_positions[str(position_number)] = self.current_position.copy()
         self.log(
             f"Position {position_number} set to X:{self.current_position['X']}, Y:{self.current_position['Y']}, Z:{self.current_position['Z']}."

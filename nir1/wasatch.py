@@ -511,6 +511,7 @@ class Wasatch:
         self.fig.subplots_adjust(bottom=0.2)
         self.canvas.get_tk_widget().pack(fill="both", expand=True)
 
+
 def signal_handler(signal, frame):
     print('\rInterrupted by Ctrl-C...shutting down', end=' ')
     clean_shutdown()
