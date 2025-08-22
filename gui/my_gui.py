@@ -34,6 +34,7 @@ LINE_COLORS = ['#60A5FA', '#34D399', '#F472B6', '#A78BFA',
                '#F59E0B', '#F87171', '#22D3EE', '#93C5FD']
 
 
+
 class TkLogHandler(logging.Handler):
     """Forward logging records to the GUI log window."""
 
@@ -57,6 +58,7 @@ class ToolTip:
         self.text = text
         self.tip = None
         self.gui = gui
+
         widget.bind("<Enter>", self.show)
         widget.bind("<Leave>", self.hide)
 
@@ -71,6 +73,7 @@ class ToolTip:
         fg = TOOLTIP_FG if self.gui and self.gui.dark_mode else "#000000"
         label = tk.Label(tw, text=self.text, background=bg, foreground=fg,
                          relief="solid", borderwidth=1)
+
         label.pack(ipadx=1)
         tw.wm_geometry(f"+{x}+{y}")
 
@@ -163,7 +166,6 @@ class MyGUI:
         self.controls_frame.grid(row=0, column=0, sticky='nw')
         self.plots_frame = ttk.Frame(self.right_frame)
         self.plots_frame.grid(row=0, column=1, sticky='ne')
-
         # list of marked positions on the far right
         self.marks_frame = ttk.LabelFrame(self.container, text="Marked positions", **FRAME_KWARGS)
         self.marks_frame.grid(row=0, column=2, sticky='nw')
@@ -257,6 +259,7 @@ class MyGUI:
             command=lambda: self.set_position(5),
         )
         self.set_button_5.grid(row=0, column=2, rowspan=2, padx=(PADX*3, PADX), pady=PADY)
+
 
         # goto buttons aligned with the set buttons
         self.goto_button_1 = ttk.Button(self.position_frame, text="Go to 1", command=lambda: self.goto_position(1))
@@ -407,6 +410,7 @@ class MyGUI:
         self.wasatch_dark_button.grid(row=3, column=0, columnspan=2, padx=PADX, pady=PADY)
         ToolTip(self.wasatch_dark_button, "Record dark reference at current position", self)
 
+
         self.wasatch_light_button = ttk.Button(
             self.wasatch_measure_frame,
             text="Light",
@@ -415,6 +419,7 @@ class MyGUI:
         )
         self.wasatch_light_button.grid(row=3, column=2, columnspan=2, padx=PADX, pady=PADY)
         ToolTip(self.wasatch_light_button, "Record light reference at current position", self)
+
 
         # Progress bar
         self.progress_bar = ttk.Progressbar(self.wasatch_measure_frame, orient="horizontal", length=300,  mode="determinate")
@@ -438,6 +443,7 @@ class MyGUI:
         self.run_area_button.grid(row=6, column=1, padx=PADX, pady=PADY)
         ToolTip(self.run_area_button, "Start scan over defined area", self)
 
+
         self.wasatch_stop_button = ttk.Button(self.wasatch_measure_frame, text="Stop", command=self.stop_measurement)
         self.wasatch_stop_button.grid(row=6, column=2, padx=PADX, pady=PADY)
         
@@ -448,14 +454,23 @@ class MyGUI:
         )
         self.pause_button.grid(row=7, column=0, columnspan=2, padx=PADX, pady=PADY)
         ToolTip(self.pause_button, "Pause scan to take dark and optional light references", self)
+
         self.continue_button = ttk.Button(
             self.wasatch_measure_frame,
             text="Continue",
             command=self.continue_measurement,
             state=tk.DISABLED
+        )        self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
+        ToolTip(self.continue_button, "Return to saved position and resume scan")
+
+
+        self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
+        self.estimated_time_label = ttk.Label(
+            self.wasatch_measure_frame, textvariable=self.estimated_time_var
         )
         self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
         ToolTip(self.continue_button, "Return to saved position and resume scan", self)
+
 
         self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
         self.estimated_time_label = ttk.Label(
@@ -501,6 +516,7 @@ class MyGUI:
         except Exception:
             pass
         try:
+
             self.map_ax.set_proj_type('ortho')
         except Exception:
             pass
@@ -521,6 +537,7 @@ class MyGUI:
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
 
         # Spectrum plot with controls to the right
+
         self.spectrum_frame = ttk.LabelFrame(
             self.controls_frame, text="Spectrum", **FRAME_KWARGS
         )
@@ -532,31 +549,37 @@ class MyGUI:
         self.wasatch.init_spectrum_plot(canvas_holder)
         nav_frame = ttk.Frame(spec_container)
         nav_frame.pack(side="right", padx=(PADX, 0))
+
         ttk.Button(
             nav_frame,
             text="◀",
             command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis="x"),
         ).pack()
+
         ttk.Button(
             nav_frame,
             text="▶",
             command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis="x"),
         ).pack()
+
         ttk.Button(
             nav_frame,
             text="▲",
             command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis="y"),
         ).pack()
+
         ttk.Button(
             nav_frame,
             text="▼",
             command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis="y"),
         ).pack()
+
         ttk.Button(
             nav_frame,
             text="🔍+",
             command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8),
         ).pack()
+
         ttk.Button(
             nav_frame,
             text="🔍-",
@@ -568,6 +591,7 @@ class MyGUI:
         self.dark_button = ttk.Button(self.right_frame, text="Dark Mode", command=self.toggle_dark_mode)
         self.dark_button.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="ew")
         ToolTip(self.dark_button, "Toggle dark theme", self)
+
 
         self.calculate_predicted_points()
 
@@ -641,6 +665,7 @@ class MyGUI:
         self.marked_list.config(bg=entry_bg, fg=fg, selectbackground=ACCENT, selectforeground=bg)
         self.log_text.config(bg=entry_bg, fg=fg, insertbackground=fg)
 
+
     def update_progress(self, progress):
         def _do():
             self.progress_bar["value"] = progress
@@ -651,7 +676,6 @@ class MyGUI:
         def _do():
             self.time_calc_progress["value"] = progress
         self.root.after(0, _do)
-
     def zoom_axes(self, ax, canvas, factor, is3d=False):
         if is3d:
             xlim = ax.get_xlim3d()
@@ -896,6 +920,93 @@ class MyGUI:
         else:
             self.log("No spectrometer found")
 
+
+    def update_time_estimate(self):
+        self.update_time_calc_progress(0)
+
+        try:
+            count_x = int(self.wasatch_samples_countX_entry.get())
+            count_y = int(self.wasatch_samples_countY_entry.get())
+            count_z = int(self.wasatch_samples_countZ_entry.get())
+        except ValueError:
+            self.estimated_time_var.set("Estimated time: n/a")
+            return
+
+        defined = [p for p in self.user_positions.values() if p]
+        if len(defined) < 2:
+            self.estimated_time_var.set("Estimated time: n/a")
+            return
+
+        if self.wasatch.bounds:
+            start_x, end_x, start_y, end_y, start_z, end_z = (
+                self.wasatch.bounds[0], self.wasatch.bounds[1],
+                self.wasatch.bounds[2], self.wasatch.bounds[3],
+                self.wasatch.bounds[4], self.wasatch.bounds[5],
+            )
+        else:
+            xs = [p['X'] for p in defined]
+            ys = [p['Y'] for p in defined]
+            zs = [p['Z'] for p in defined]
+            if self.user_positions.get('1'):
+                start_x = self.user_positions['1']['X']
+                start_y = self.user_positions['1']['Y']
+                start_z = self.user_positions['1']['Z']
+            else:
+                start_x = min(xs)
+                start_y = min(ys)
+                start_z = min(zs)
+            end_x = max(xs) if start_x == min(xs) else min(xs)
+            end_y = max(ys) if start_y == min(ys) else min(ys)
+            end_z = max(zs) if start_z == min(zs) else min(zs)
+        if start_x == end_x and count_x > 1:
+            self.wasatch_samples_countX_entry.delete(0, tk.END)
+            self.wasatch_samples_countX_entry.insert(0, '1')
+            count_x = 1
+        if start_y == end_y and count_y > 1:
+            self.wasatch_samples_countY_entry.delete(0, tk.END)
+            self.wasatch_samples_countY_entry.insert(0, '1')
+            count_y = 1
+        if start_z == end_z and count_z > 1:
+            self.wasatch_samples_countZ_entry.delete(0, tk.END)
+            self.wasatch_samples_countZ_entry.insert(0, '1')
+            count_z = 1
+
+        step_x = (end_x - start_x) / (count_x - 1) if count_x > 1 else 0
+        step_y = (end_y - start_y) / (count_y - 1) if count_y > 1 else 0
+        step_z = (end_z - start_z) / (count_z - 1) if count_z > 1 else 0
+
+        self.log(
+            f"Estimating time with counts X={count_x}, Y={count_y}, Z={count_z}"
+        )
+        self.log(
+            f"Step sizes for estimate: step_x={step_x}, step_y={step_y}, step_z={step_z}"
+        )
+
+        measure_count = max(count_x * count_y * count_z, 1)
+        move_delay = self.interpolate_time(max(abs(step_x), abs(step_y), abs(step_z)))
+        per_point = self.integration_time * self.scans_to_average + self.delay_ms + move_delay
+        total_ms = measure_count * per_point
+        self.log(
+            "Per point: integration=%dms x%d, delay=%dms, move=%dms -> %dms"
+            % (self.integration_time, self.scans_to_average, self.delay_ms, move_delay, per_point)
+        )
+        # with absolute moves there is no separate row reset delay
+        self.log(f"Estimated total time {total_ms/1000:.2f} s")
+
+        self.estimated_time_var.set(
+            f"Estimated time: {total_ms/1000:.1f} s"
+        )
+        self.update_time_calc_progress(100)
+
+
+    def connect_spectrometer(self):
+        self.log("Connecting spectrometer...")
+        device = self.wasatch.connect()
+        if device:
+            self.log("Spectrometer connected")
+        else:
+            self.log("No spectrometer found")
+
     def toggle_connection(self):
         if self.serial.connected:
             log_message = self.serial.disconnect_cnc()
@@ -1063,7 +1174,7 @@ class MyGUI:
             ys.append(pos['Y'])
             zs.append(pos['Z'])
 
-        if xs and ys and zs:
+        if xs and ys and zs and not self.map_zoomed:
             self.map_ax.set_xlim(min(xs), max(xs))
             self.map_ax.set_ylim(min(ys), max(ys))
             self.map_ax.set_zlim(min(zs), max(zs))
@@ -1077,6 +1188,7 @@ class MyGUI:
 
 
     def set_position(self, position_number):
+        self.map_zoomed = False
         self.user_positions[str(position_number)] = self.current_position.copy()
         self.log(
             f"Position {position_number} set to X:{self.current_position['X']}, Y:{self.current_position['Y']}, Z:{self.current_position['Z']}."
