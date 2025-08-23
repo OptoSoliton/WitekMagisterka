@@ -133,6 +133,9 @@ class MyGUI:
         self.marked_dots_head = []
         self.marked_labels_head = []
 
+        self.log_popup = None
+        self.log_popup_text = None
+
         self.setup_ui()
         self.apply_theme()
         self.wasatch.set_dark_mode(self.dark_mode)
@@ -143,6 +146,8 @@ class MyGUI:
         self.paused = False
         self.measure_thread = threading.Thread()
         self.pause_position = None
+        self.log_popup = None
+        self.log_popup_text = None
 
     def setup_ui(self):
 
@@ -332,6 +337,7 @@ class MyGUI:
         # Marked positions next to spectrum
         self.marks_frame = ttk.LabelFrame(self.left_frame, text="Marked positions", **FRAME_KWARGS)
         self.marks_frame.grid(row=5, column=1, padx=(0, PADX), pady=PADY, sticky="nw")
+
         self.marked_list = tk.Listbox(self.marks_frame, width=25)
         self.marked_list.pack(padx=PADX, pady=PADY)
         self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
@@ -346,6 +352,7 @@ class MyGUI:
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
         self.log_popup_button = ttk.Button(self.log_frame, text="Open log", command=self.open_log_file)
+
         self.log_popup_button.pack(padx=PADX, pady=(0, PADY))
 
         # Spectrometer connection frame
@@ -680,6 +687,8 @@ class MyGUI:
         self.style.configure('TCombobox', fieldbackground=entry_bg, foreground=fg)
         self.marked_list.config(bg=entry_bg, fg=fg, selectbackground=ACCENT, selectforeground=bg)
         self.log_text.config(bg=entry_bg, fg=fg, insertbackground=fg)
+        if self.log_popup_text:
+            self.log_popup_text.config(bg=entry_bg, fg=fg, insertbackground=fg)
         # Apply colors to 3D head-position plot
         if hasattr(self, 'map_ax'):
             self.map_fig.set_facecolor(bg)
@@ -1061,6 +1070,9 @@ class MyGUI:
         def _do():
             self.log_text.insert(tk.END, message + "\n")
             self.log_text.see(tk.END)
+            if self.log_popup_text:
+                self.log_popup_text.insert(tk.END, message + "\n")
+                self.log_popup_text.see(tk.END)
         self.root.after(0, _do)
 
     def prompt_retry(self, msg):
@@ -1083,12 +1095,12 @@ class MyGUI:
         elif direction == '\u2193':  # Rear (Y-)
             self.current_position['Y'] -= step
             command = f'G1 Y-{step} F{speed}'
-        elif direction == '\u2190':  # Left (X-)
-            self.current_position['X'] -= step
-            command = f'G1 X-{step} F{speed}'
-        elif direction == '\u2192':  # Right (X+)
+        elif direction == '\u2190':  # Left (X+)
             self.current_position['X'] += step
             command = f'G1 X{step} F{speed}'
+        elif direction == '\u2192':  # Right (X-)
+            self.current_position['X'] -= step
+            command = f'G1 X-{step} F{speed}'
         elif direction == 'Up':  # Up (Z+)
             self.current_position['Z'] += step
             command = f'G1 Z{step} F{speed}'
