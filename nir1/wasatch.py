@@ -59,6 +59,9 @@ class Wasatch:
             self.points_ax.zaxis.set_major_locator(_ticker.MaxNLocator(prune='lower'))
         except Exception:
             pass
+        self.points_ax.get_zaxis().set_visible(False)
+        self.points_ax.set_zlabel('')
+        self.points_ax.set_zticks([])
         self.points_canvas = None
 
         self.points = []
@@ -501,7 +504,8 @@ class Wasatch:
 
             self.points_ax.set_xlabel('X')
             self.points_ax.set_ylabel('Y')
-            self.points_ax.set_zlabel('Z')
+            self.points_ax.set_zlabel('')
+            self.points_ax.set_zticks([])
             if self.scan_points:
                 handles, labels = self.points_ax.get_legend_handles_labels()
                 if handles:
@@ -509,6 +513,8 @@ class Wasatch:
             xr = self.points_ax.get_xlim3d()[1] - self.points_ax.get_xlim3d()[0]
             yr = self.points_ax.get_ylim3d()[1] - self.points_ax.get_ylim3d()[0]
             zr = self.points_ax.get_zlim3d()[1] - self.points_ax.get_zlim3d()[0]
+            if zr == 0:
+                zr = 1
             self.points_ax.set_box_aspect([xr, yr, zr])
             self.points_canvas.draw()
 
