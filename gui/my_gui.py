@@ -140,6 +140,9 @@ class MyGUI:
         self.marked_dots_head = []
         self.marked_labels_head = []
 
+        self.log_popup = None
+        self.log_popup_text = None
+
         self.setup_ui()
         self.apply_theme()
         self.wasatch.set_dark_mode(self.dark_mode)
@@ -1089,12 +1092,12 @@ class MyGUI:
         elif direction == '\u2193':  # Rear (Y-)
             self.current_position['Y'] -= step
             command = f'G1 Y-{step} F{speed}'
-        elif direction == '\u2190':  # Left (X-)
-            self.current_position['X'] -= step
-            command = f'G1 X-{step} F{speed}'
-        elif direction == '\u2192':  # Right (X+)
+        elif direction == '\u2190':  # Left (X+)
             self.current_position['X'] += step
             command = f'G1 X{step} F{speed}'
+        elif direction == '\u2192':  # Right (X-)
+            self.current_position['X'] -= step
+            command = f'G1 X-{step} F{speed}'
         elif direction == 'Up':  # Up (Z+)
             self.current_position['Z'] += step
             command = f'G1 Z{step} F{speed}'
