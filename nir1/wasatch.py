@@ -112,6 +112,7 @@ class Wasatch:
         self.points_ax.yaxis.label.set_color(axis)
         self.points_ax.zaxis.label.set_color(axis)
         self.points_ax.grid(color=grid, alpha=0.25)
+
         if self.canvas:
             self.canvas.draw_idle()
         if self.points_canvas:
