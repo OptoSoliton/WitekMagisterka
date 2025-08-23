@@ -17,6 +17,7 @@ from wasatch.RealUSBDevice        import RealUSBDevice
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure
 import logging
+import subprocess
 
 # Dark palette shared with the GUI
 APP_BG = '#0F1117'
@@ -263,7 +264,11 @@ class Wasatch:
         return device
 
     def troubleshoot_connection(self):
+        """Attempt a variety of low level recovery steps to connect."""
         log.info("Starting connection troubleshooting")
+
+        # enumerate using WasatchBus
+
         try:
             self.bus = WasatchBus(use_sim=False)
             self.bus.update()
@@ -272,7 +277,41 @@ class Wasatch:
                 log.info("Device id: %s", dev)
         except Exception as e:
             log.exception("USB enumeration failed: %s", e)
-            return None
+
+        # enumerate with pyusb for raw details
+        try:
+            import usb.core, usb.util  # type: ignore
+            devices = list(usb.core.find(find_all=True))
+            log.info("pyusb detected %d USB devices", len(devices))
+            for dev in devices:
+                log.info(
+                    "USB vid=0x%04x pid=0x%04x bus=%s addr=%s", dev.idVendor, dev.idProduct,
+                    getattr(dev, 'bus', '?'), getattr(dev, 'address', '?')
+                )
+                if dev.idVendor == 0x24aa:
+                    try:
+                        log.info("Attempting USB reset on spectrometer")
+                        dev.reset()
+                        usb.util.dispose_resources(dev)
+                    except Exception as ex:
+                        log.exception("USB reset failed: %s", ex)
+        except Exception as e:
+            log.exception("pyusb enumeration failed: %s", e)
+
+        # system level diagnostics
+        try:
+            if sys.platform.startswith('linux'):
+                out = subprocess.check_output(['lsusb']).decode(errors='ignore')
+                log.info("lsusb output:\n%s", out)
+            elif os.name == 'nt':
+                cmd = ['powershell', '-Command',
+                       'Get-PnpDevice -PresentOnly | Where-Object {$_.InstanceId -like "*VID_24AA*"}']
+                out = subprocess.check_output(cmd, text=True)
+                log.info("PnpDevice output:\n%s", out)
+        except Exception as e:
+            log.exception("System USB query failed: %s", e)
+
+        # attempt multiple connection methods
 
         methods = [
             ("WasatchDevice", WasatchDevice),
@@ -289,8 +328,35 @@ class Wasatch:
             except Exception as e:
                 log.exception("%s connection failed: %s", name, e)
 
+        # final forced connection attempts
+        device = self.force_connect()
+        if device:
+            return device
+
         log.info("Troubleshooting finished - no spectrometer connected")
         return None
+
+    def force_connect(self, attempts: int = 3, delay: float = 1.0):
+        """Repeatedly try to connect, resetting USB between attempts."""
+        for i in range(attempts):
+            log.info("Force-connect attempt %d/%d", i + 1, attempts)
+            device = self.connect()
+            if device:
+                log.info("Force-connect succeeded on attempt %d", i + 1)
+                return device
+            try:
+                import usb.core, usb.util  # type: ignore
+                dev = usb.core.find(idVendor=0x24aa)
+                if dev:
+                    log.info("Issuing USB reset to spectrometer")
+                    dev.reset()
+                    usb.util.dispose_resources(dev)
+            except Exception as e:
+                log.exception("USB reset attempt failed: %s", e)
+            time.sleep(delay)
+        log.info("Force-connect attempts exhausted")
+        return None
+
 
     def run(self, label):
         if self.device is None:

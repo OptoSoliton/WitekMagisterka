@@ -154,8 +154,9 @@ class MyGUI:
         # Left and right part of window
         self.left_frame = ttk.Frame(self.main_frame)
         self.left_frame.grid(row=0, column=0, sticky='nw')
-        self.left_frame.columnconfigure(0, weight=1)
-        self.left_frame.columnconfigure(1, weight=1)
+        self.left_frame.columnconfigure(0, weight=0)
+        self.left_frame.columnconfigure(1, weight=0)
+
         self.left_frame.columnconfigure(2, weight=1)
 
         self.right_frame = ttk.Frame(self.main_frame)
@@ -352,7 +353,6 @@ class MyGUI:
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
         self.log_popup_button = ttk.Button(self.log_frame, text="Open log", command=self.open_log_file)
-
         self.log_popup_button.pack(padx=PADX, pady=(0, PADY))
 
         # Spectrometer connection frame
@@ -368,7 +368,8 @@ class MyGUI:
 
         self.troubleshoot_button = ttk.Button(
             self.wasatch_connection_frame,
-            text="Troubleshoot connection",
+            text="Troubleshoot/Force connect",
+
             command=self.troubleshoot_spectrometer,
         )
         self.troubleshoot_button.grid(row=0, column=1, padx=PADX, pady=PADY)
