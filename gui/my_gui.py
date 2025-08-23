@@ -154,9 +154,13 @@ class MyGUI:
         # Left and right part of window
         self.left_frame = ttk.Frame(self.main_frame)
         self.left_frame.grid(row=0, column=0, sticky='nw')
-        self.left_frame.columnconfigure(0, weight=0)
+        self.left_frame.columnconfigure(0, weight=1)
         self.left_frame.columnconfigure(1, weight=0)
-        self.left_frame.columnconfigure(2, weight=1)
+        self.left_frame.columnconfigure(2, weight=0)
+        for r in range(5):
+            self.left_frame.rowconfigure(r, weight=0)
+        self.left_frame.rowconfigure(5, weight=1)
+
 
         self.right_frame = ttk.Frame(self.main_frame)
         self.right_frame.grid(row=0, column=1, sticky='nw')
@@ -349,15 +353,11 @@ class MyGUI:
         self.log_text = scrolledtext.ScrolledText(
             self.log_frame, wrap=tk.WORD, height=18, width=20
         )
-
         self.log_text.pack(fill=tk.BOTH, expand=True)
         # provide a popup to view the full log history without widening the main window
         self.log_popup_button = ttk.Button(
             self.log_frame, text="Open log", command=self.open_log_file
         )
-        self.log_popup_button.pack(padx=PADX, pady=(0, PADY))
-
-        self.log_popup_button = ttk.Button(self.log_frame, text="Open log", command=self.open_log_file)
         self.log_popup_button.pack(padx=PADX, pady=(0, PADY))
 
         # Spectrometer connection frame
@@ -380,22 +380,12 @@ class MyGUI:
             command=self.connect_spectrometer,
         )
         self.wasatch_connect_button.grid(row=1, column=0, padx=PADX, pady=PADY)
-
         self.troubleshoot_button = ttk.Button(
             self.wasatch_connection_frame,
             text="Troubleshoot/Force connect",
             command=self.troubleshoot_spectrometer,
         )
         self.troubleshoot_button.grid(row=1, column=1, padx=PADX, pady=PADY)
-
-
-        self.troubleshoot_button = ttk.Button(
-            self.wasatch_connection_frame,
-            text="Troubleshoot/Force connect",
-
-            command=self.troubleshoot_spectrometer,
-        )
-        self.troubleshoot_button.grid(row=0, column=1, padx=PADX, pady=PADY)
 
         # File path selection for saving spectra
         self.file_path_frame = ttk.LabelFrame(self.controls_frame, text="File path for spectra", **FRAME_KWARGS)
@@ -620,6 +610,11 @@ class MyGUI:
             self.map_ax.set_proj_type('ortho')
         except Exception:
             pass
+        self.map_ax.view_init(elev=90, azim=-90)
+        self.map_ax.invert_xaxis()
+        self.map_ax.invert_yaxis()
+        self.map_ax.set_zlabel('')
+        self.map_ax.set_zticks([])
         self.map_canvas = FigureCanvasTkAgg(self.map_fig, master=self.map_frame)
         self.map_canvas.draw()
         self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
@@ -1218,6 +1213,11 @@ class MyGUI:
             self.map_ax.set_proj_type('ortho')
         except Exception:
             pass
+        self.map_ax.view_init(elev=90, azim=-90)
+        self.map_ax.invert_xaxis()
+        self.map_ax.invert_yaxis()
+        self.map_ax.set_zlabel('')
+        self.map_ax.set_zticks([])
 
         xs = []
         ys = []
@@ -1280,21 +1280,18 @@ class MyGUI:
             self.map_ax.set_xlim(min(xs), max(xs))
             self.map_ax.set_ylim(min(ys), max(ys))
             self.map_ax.set_zlim(min(zs), max(zs))
+            self.map_ax.set_zticks([])
         self.map_ax.set_box_aspect([1, 1, 1])
         # hide overlapping ticks when range collapses
         if min(ys) == max(ys):
             self.map_ax.set_yticks([])
         else:
             self.map_ax.set_yticks(None)
-        if min(zs) == max(zs):
-            self.map_ax.set_zticks([])
-        else:
-            self.map_ax.set_zticks(None)
 
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
-        self.map_ax.set_zlabel('Z')
-        self.map_canvas.draw_idle()
+        self.map_canvas.draw()
+
         self.wasatch.update_marked_points(self.marked_positions)
 
 
