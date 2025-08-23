@@ -1,7 +1,7 @@
 import tkinter as tk
 from gui.my_gui import MyGUI
 from cnc.cnc_serial import CNCSerial
-from nir1.wasatch import Wasatch
+from nir1.wasatch_wrapper import Wasatch
 import sys
 
 if __name__ == "__main__":

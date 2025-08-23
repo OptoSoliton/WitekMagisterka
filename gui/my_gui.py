@@ -151,7 +151,6 @@ class MyGUI:
         self.left_frame.grid(row=0, column=0, sticky='nw')
         self.left_frame.columnconfigure(0, weight=1)
         self.left_frame.columnconfigure(1, weight=0)
-        self.left_frame.columnconfigure(2, weight=0)
         for r in range(5):
             self.left_frame.rowconfigure(r, weight=0)
         self.left_frame.rowconfigure(5, weight=1)
@@ -279,7 +278,7 @@ class MyGUI:
         
         # Manual command frame
         self.manual_command_frame = ttk.LabelFrame(self.left_frame, text="Manual command", **FRAME_KWARGS)
-        self.manual_command_frame.grid(row=4, column=0, columnspan=2, padx=PADX, pady=PADY, sticky="ew")
+        self.manual_command_frame.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="ew")
 
 
         self.manual_command_label = ttk.Label(self.manual_command_frame, text="Command:")
@@ -291,9 +290,12 @@ class MyGUI:
         self.manual_command_button = ttk.Button(self.manual_command_frame, text="Send", command=self.send_manual_command)
         self.manual_command_button.grid(row=0, column=2, padx=PADX, pady=PADY)
 
-        # Spectrum plot moved to log position
-        self.spectrum_frame = ttk.LabelFrame(self.left_frame, text="Spectrum", **FRAME_KWARGS)
-        self.spectrum_frame.grid(row=5, column=0, padx=(PADX, 0), pady=PADY, sticky="nw")
+        # Bottom section holding spectrum and marked positions
+        self.bottom_frame = ttk.Frame(self.left_frame)
+        self.bottom_frame.grid(row=5, column=0, sticky="nw")
+
+        self.spectrum_frame = ttk.LabelFrame(self.bottom_frame, text="Spectrum", **FRAME_KWARGS)
+        self.spectrum_frame.grid(row=0, column=0, padx=(PADX, 0), pady=PADY, sticky="nw")
         spec_container = ttk.Frame(self.spectrum_frame)
         spec_container.pack()
         canvas_holder = ttk.Frame(spec_container)
@@ -332,9 +334,8 @@ class MyGUI:
             command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25),
         ).pack()
 
-        # Marked positions next to spectrum
-        self.marks_frame = ttk.LabelFrame(self.left_frame, text="Marked positions", **FRAME_KWARGS)
-        self.marks_frame.grid(row=5, column=1, padx=(0, PADX), pady=PADY, sticky="nw")
+        self.marks_frame = ttk.LabelFrame(self.bottom_frame, text="Marked positions", **FRAME_KWARGS)
+        self.marks_frame.grid(row=0, column=1, padx=(0, PADX), pady=PADY, sticky="nw")
         self.marked_list = tk.Listbox(self.marks_frame, width=25)
         self.marked_list.pack(padx=PADX, pady=PADY)
         self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
@@ -342,7 +343,7 @@ class MyGUI:
 
         # Log frame aligned next to CNC controls
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
-        self.log_frame.grid(row=0, column=2, rowspan=6, padx=PADX, pady=PADY, sticky="nsew")
+        self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky="nsew")
         # keep the on-screen log narrow so the full layout fits within 1080x1920
         self.log_text = scrolledtext.ScrolledText(
             self.log_frame, wrap=tk.WORD, height=18, width=20
@@ -606,8 +607,6 @@ class MyGUI:
         except Exception:
             pass
         self.map_ax.view_init(elev=90, azim=-90)
-        self.map_ax.invert_xaxis()
-        self.map_ax.invert_yaxis()
         self.map_ax.set_zlabel('')
         self.map_ax.set_zticks([])
         self.map_canvas = FigureCanvasTkAgg(self.map_fig, master=self.map_frame)
@@ -1202,8 +1201,6 @@ class MyGUI:
         except Exception:
             pass
         self.map_ax.view_init(elev=90, azim=-90)
-        self.map_ax.invert_xaxis()
-        self.map_ax.invert_yaxis()
         self.map_ax.set_zlabel('')
         self.map_ax.set_zticks([])
 
@@ -1278,7 +1275,12 @@ class MyGUI:
 
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
-        self.map_canvas.draw()
+        self.map_canvas.draw_idle()
+        try:
+            self.map_canvas.flush_events()
+        except Exception:
+            pass
+        self.root.update_idletasks()
         self.wasatch.update_marked_points(self.marked_positions)
 
 
