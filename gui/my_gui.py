@@ -507,7 +507,8 @@ class MyGUI:
             text="Continue",
             command=self.continue_measurement,
             state=tk.DISABLED
-        )        self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
+        )        
+        self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
         ToolTip(self.continue_button, "Return to saved position and resume scan")
 
 
@@ -671,14 +672,13 @@ class MyGUI:
         self.style.configure('TCombobox', fieldbackground=entry_bg, foreground=fg)
         self.marked_list.config(bg=entry_bg, fg=fg, selectbackground=ACCENT, selectforeground=bg)
         self.log_text.config(bg=entry_bg, fg=fg, insertbackground=fg)
-        # apply colors to 3D head position plot
+        # Apply colors to 3D head-position plot
         if hasattr(self, 'map_ax'):
             self.map_fig.set_facecolor(bg)
             self.map_ax.set_facecolor(frame_bg)
             for axis in [self.map_ax.xaxis, self.map_ax.yaxis, self.map_ax.zaxis]:
                 axis.label.set_color(fg)
                 axis.set_tick_params(colors=fg)
-            for axis in [self.map_ax.w_xaxis, self.map_ax.w_yaxis, self.map_ax.w_zaxis]:
                 axis.line.set_color(fg)
 
 
