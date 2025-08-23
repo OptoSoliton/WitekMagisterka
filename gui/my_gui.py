@@ -163,6 +163,7 @@ class MyGUI:
         self.left_frame.grid(row=0, column=0, sticky='nw')
         self.left_frame.columnconfigure(0, weight=1)
         self.left_frame.columnconfigure(1, weight=1)
+        self.left_frame.columnconfigure(2, weight=1)
 
         self.right_frame = ttk.Frame(self.container)
         self.right_frame.grid(row=0, column=1, sticky='nw')
@@ -172,13 +173,6 @@ class MyGUI:
         self.controls_frame.grid(row=0, column=0, sticky='nw')
         self.plots_frame = ttk.Frame(self.right_frame)
         self.plots_frame.grid(row=0, column=1, sticky='ne')
-        # list of marked positions on the far right
-        self.marks_frame = ttk.LabelFrame(self.container, text="Marked positions", **FRAME_KWARGS)
-        self.marks_frame.grid(row=0, column=2, sticky='nw')
-        self.marked_list = tk.Listbox(self.marks_frame, width=25)
-        self.marked_list.pack(padx=PADX, pady=PADY)
-        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
-        self.help_button.pack(padx=PADX, pady=(0, PADY))
 
         # Serial connection frame
         self.serial_connection_frame = ttk.LabelFrame(self.left_frame, text="CNC serial connection", **FRAME_KWARGS)
@@ -347,9 +341,17 @@ class MyGUI:
             command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25),
         ).pack()
 
+        # Marked positions next to spectrum
+        self.marks_frame = ttk.LabelFrame(self.left_frame, text="Marked positions", **FRAME_KWARGS)
+        self.marks_frame.grid(row=5, column=1, padx=PADX, pady=PADY, sticky="nw")
+        self.marked_list = tk.Listbox(self.marks_frame, width=25)
+        self.marked_list.pack(padx=PADX, pady=PADY)
+        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
+        self.help_button.pack(padx=PADX, pady=(0, PADY))
+
         # Log frame aligned next to CNC controls
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
-        self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky="nsew")
+        self.log_frame.grid(row=0, column=2, rowspan=6, padx=PADX, pady=PADY, sticky="nsew")
 
 
         self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=30)
@@ -1140,10 +1142,13 @@ class MyGUI:
             self.current_position['Z'] = z
             self.position_label.config(text=f"X:{x:.1f} Y:{y:.1f} Z:{z:.1f}")
             self.wasatch.position = (x, y, z)
+            self.wasatch.update_points_plot()
             self.update_volume_display()
-        self.wasatch.update_points_plot()
 
-        self.root.after(0, _do)
+        if threading.current_thread() is threading.main_thread():
+            _do()
+        else:
+            self.root.after(0, _do)
 
     def mark_current_position(self):
         idx = len(self.marked_positions) + 1
@@ -1241,7 +1246,7 @@ class MyGUI:
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
         self.map_ax.set_zlabel('Z')
-        self.map_canvas.draw()
+        self.map_canvas.draw_idle()
         self.wasatch.update_marked_points(self.marked_positions)
 
 
