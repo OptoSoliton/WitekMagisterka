@@ -5,6 +5,9 @@ import time
 import threading
 import numpy as np
 import logging
+import os
+import sys
+import subprocess
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure  # required for embedded plots
 
@@ -89,24 +92,14 @@ class MyGUI:
         self.root.title("CNC & Wasatch Controller")
         # default to Full HD layout to keep controls and plots visible
         self.root.geometry("1920x1080")
+        self.root.resizable(True, True)
         try:
             self.root.state('zoomed')
         except Exception:
             pass
 
-        # scrollable container so every widget is accessible even on small screens
-        self.canvas = tk.Canvas(self.root)
-        self.vscroll = ttk.Scrollbar(self.root, orient='vertical', command=self.canvas.yview)
-        self.canvas.configure(yscrollcommand=self.vscroll.set)
-        self.canvas.pack(side="left", fill="both", expand=True)
-        self.vscroll.pack(side="right", fill="y")
-
-        self.container = ttk.Frame(self.canvas)
-        self.canvas.create_window((0, 0), window=self.container, anchor='nw')
-        self.container.bind(
-            '<Configure>',
-            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox('all'))
-        )
+        self.main_frame = ttk.Frame(self.root)
+        self.main_frame.pack(fill="both", expand=True)
 
         self.style = ttk.Style(self.root)
         self.style.theme_use('clam')
@@ -153,13 +146,14 @@ class MyGUI:
 
     def setup_ui(self):
 
-        # Left and right part of window inside scrollable container
-        self.left_frame = ttk.Frame(self.container)
+        # Left and right part of window
+        self.left_frame = ttk.Frame(self.main_frame)
         self.left_frame.grid(row=0, column=0, sticky='nw')
-        self.left_frame.columnconfigure(0, weight=1)
-        self.left_frame.columnconfigure(1, weight=1)
+        self.left_frame.columnconfigure(0, weight=0)
+        self.left_frame.columnconfigure(1, weight=0)
+        self.left_frame.columnconfigure(2, weight=1)
 
-        self.right_frame = ttk.Frame(self.container)
+        self.right_frame = ttk.Frame(self.main_frame)
         self.right_frame.grid(row=0, column=1, sticky='nw')
 
         # split right side into controls and plots to avoid oversized grid rows
@@ -167,13 +161,6 @@ class MyGUI:
         self.controls_frame.grid(row=0, column=0, sticky='nw')
         self.plots_frame = ttk.Frame(self.right_frame)
         self.plots_frame.grid(row=0, column=1, sticky='ne')
-        # list of marked positions on the far right
-        self.marks_frame = ttk.LabelFrame(self.container, text="Marked positions", **FRAME_KWARGS)
-        self.marks_frame.grid(row=0, column=2, sticky='nw')
-        self.marked_list = tk.Listbox(self.marks_frame, width=25)
-        self.marked_list.pack(padx=PADX, pady=PADY)
-        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
-        self.help_button.pack(padx=PADX, pady=(0, PADY))
 
         # Serial connection frame
         self.serial_connection_frame = ttk.LabelFrame(self.left_frame, text="CNC serial connection", **FRAME_KWARGS)
@@ -289,7 +276,7 @@ class MyGUI:
         
         # Manual command frame
         self.manual_command_frame = ttk.LabelFrame(self.left_frame, text="Manual command", **FRAME_KWARGS)
-        self.manual_command_frame.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="ew")
+        self.manual_command_frame.grid(row=4, column=0, columnspan=2, padx=PADX, pady=PADY, sticky="ew")
 
 
         self.manual_command_label = ttk.Label(self.manual_command_frame, text="Command:")
@@ -303,7 +290,7 @@ class MyGUI:
 
         # Spectrum plot moved to log position
         self.spectrum_frame = ttk.LabelFrame(self.left_frame, text="Spectrum", **FRAME_KWARGS)
-        self.spectrum_frame.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="nw")
+        self.spectrum_frame.grid(row=5, column=0, padx=(PADX, 0), pady=PADY, sticky="nw")
         spec_container = ttk.Frame(self.spectrum_frame)
         spec_container.pack()
         canvas_holder = ttk.Frame(spec_container)
@@ -342,20 +329,42 @@ class MyGUI:
             command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25),
         ).pack()
 
+        # Marked positions next to spectrum
+        self.marks_frame = ttk.LabelFrame(self.left_frame, text="Marked positions", **FRAME_KWARGS)
+        self.marks_frame.grid(row=5, column=1, padx=(0, PADX), pady=PADY, sticky="nw")
+        self.marked_list = tk.Listbox(self.marks_frame, width=25)
+        self.marked_list.pack(padx=PADX, pady=PADY)
+        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
+        self.help_button.pack(padx=PADX, pady=(0, PADY))
+
         # Log frame aligned next to CNC controls
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
-        self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky="nsew")
+        self.log_frame.grid(row=0, column=2, rowspan=6, padx=PADX, pady=PADY, sticky="nsew")
 
 
-        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=50)
+        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=30)
         self.log_text.pack(fill=tk.BOTH, expand=True)
+
+        self.log_popup_button = ttk.Button(self.log_frame, text="Open log", command=self.open_log_file)
+        self.log_popup_button.pack(padx=PADX, pady=(0, PADY))
 
         # Spectrometer connection frame
         self.wasatch_connection_frame = ttk.LabelFrame(self.controls_frame, text="Wasatch connection", **FRAME_KWARGS)
         self.wasatch_connection_frame.pack(fill='x', padx=PADX, pady=PADY)
 
-        self.wasatch_connect_button = ttk.Button(self.wasatch_connection_frame, text="Connect spectrometer", command=self.connect_spectrometer)
+        self.wasatch_connect_button = ttk.Button(
+            self.wasatch_connection_frame,
+            text="Connect spectrometer",
+            command=self.connect_spectrometer,
+        )
         self.wasatch_connect_button.grid(row=0, column=0, padx=PADX, pady=PADY)
+
+        self.troubleshoot_button = ttk.Button(
+            self.wasatch_connection_frame,
+            text="Troubleshoot/Force connect",
+            command=self.troubleshoot_spectrometer,
+        )
+        self.troubleshoot_button.grid(row=0, column=1, padx=PADX, pady=PADY)
 
         # File path selection for saving spectra
         self.file_path_frame = ttk.LabelFrame(self.controls_frame, text="File path for spectra", **FRAME_KWARGS)
@@ -661,7 +670,6 @@ class MyGUI:
                                  background='#4a90e2')
 
         self.root.configure(bg=bg)
-        self.canvas.configure(bg=bg)
         self.style.configure('TFrame', background=bg)
         self.style.configure('TLabelframe', background=frame_bg, foreground=fg)
         self.style.configure('TLabelframe.Label', background=frame_bg, foreground=fg)
@@ -928,16 +936,6 @@ class MyGUI:
         )
         self.update_time_calc_progress(100)
 
-    def connect_spectrometer(self):
-        self.log("Connecting spectrometer...")
-        device = self.wasatch.connect()
-        if device:
-            self.log("Spectrometer connected")
-        else:
-            self.log("No spectrometer found")
-#USUN JESLI TRZEBA START
-
-
     def update_time_estimate(self):
         self.update_time_calc_progress(0)
 
@@ -1023,7 +1021,17 @@ class MyGUI:
             self.log("Spectrometer connected")
         else:
             self.log("No spectrometer found")
-#USUN JESLI TRZEBA KONIEC
+
+    def troubleshoot_spectrometer(self):
+        threading.Thread(target=self._troubleshoot_thread, daemon=True).start()
+
+    def _troubleshoot_thread(self):
+        self.log("Starting spectrometer troubleshooting...")
+        device = self.wasatch.troubleshoot_connection()
+        if device:
+            self.log("Troubleshooting connected to spectrometer")
+        else:
+            self.log("Troubleshooting failed to connect")
 
     def toggle_connection(self):
         if self.serial.connected:
@@ -1034,6 +1042,20 @@ class MyGUI:
             log_message = self.serial.connect_cnc(port)
             self.connect_button.config(text="Disconnect")
         self.log(log_message)
+
+    def open_log_file(self):
+        path = os.path.join(os.getcwd(), "log.txt")
+        try:
+            with open(path, "w", encoding="utf-8") as f:
+                f.write(self.log_text.get("1.0", tk.END))
+            if sys.platform.startswith("darwin"):
+                subprocess.call(("open", path))
+            elif os.name == "nt":
+                os.startfile(path)
+            else:
+                subprocess.call(("xdg-open", path))
+        except Exception as e:
+            messagebox.showerror("Open log", f"Could not open log file: {e}")
 
     def log(self, message):
         def _do():
@@ -1109,10 +1131,13 @@ class MyGUI:
             self.current_position['Z'] = z
             self.position_label.config(text=f"X:{x:.1f} Y:{y:.1f} Z:{z:.1f}")
             self.wasatch.position = (x, y, z)
+            self.wasatch.update_points_plot()
             self.update_volume_display()
-        self.wasatch.update_points_plot()
 
-        self.root.after(0, _do)
+        if threading.current_thread() is threading.main_thread():
+            _do()
+        else:
+            self.root.after(0, _do)
 
     def mark_current_position(self):
         idx = len(self.marked_positions) + 1
@@ -1210,7 +1235,7 @@ class MyGUI:
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
         self.map_ax.set_zlabel('Z')
-        self.map_canvas.draw()
+        self.map_canvas.draw_idle()
         self.wasatch.update_marked_points(self.marked_positions)
 
 
