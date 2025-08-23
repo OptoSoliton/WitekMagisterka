@@ -262,6 +262,36 @@ class Wasatch:
         log.info("Spectrometer connected")
         return device
 
+    def troubleshoot_connection(self):
+        log.info("Starting connection troubleshooting")
+        try:
+            self.bus = WasatchBus(use_sim=False)
+            self.bus.update()
+            log.info("Found %d USB devices", len(self.bus.device_ids))
+            for dev in self.bus.device_ids:
+                log.info("Device id: %s", dev)
+        except Exception as e:
+            log.exception("USB enumeration failed: %s", e)
+            return None
+
+        methods = [
+            ("WasatchDevice", WasatchDevice),
+            ("WasatchDeviceWrapper", WasatchDeviceWrapper),
+        ]
+        for name, cls in methods:
+            try:
+                log.info("Attempting connection using %s", name)
+                dev = cls(self.bus.device_ids[0])
+                dev.connect()
+                self.device = dev
+                log.info("%s connection succeeded", name)
+                return dev
+            except Exception as e:
+                log.exception("%s connection failed: %s", name, e)
+
+        log.info("Troubleshooting finished - no spectrometer connected")
+        return None
+
     def run(self, label):
         if self.device is None:
             log.info("Not connected to spectrometer")
