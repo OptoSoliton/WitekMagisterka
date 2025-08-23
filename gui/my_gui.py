@@ -150,6 +150,8 @@ class MyGUI:
         self.paused = False
         self.measure_thread = threading.Thread()
         self.pause_position = None
+        self.log_popup = None
+        self.log_popup_text = None
 
     def setup_ui(self):
 
@@ -347,8 +349,11 @@ class MyGUI:
         self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky="nsew")
 
 
-        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=50)
+        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=30)
         self.log_text.pack(fill=tk.BOTH, expand=True)
+
+        self.log_popup_button = ttk.Button(self.log_frame, text="Open log", command=self.open_log_popup)
+        self.log_popup_button.pack(padx=PADX, pady=(0, PADY))
 
         # Spectrometer connection frame
         self.wasatch_connection_frame = ttk.LabelFrame(self.controls_frame, text="Wasatch connection", **FRAME_KWARGS)
@@ -672,6 +677,8 @@ class MyGUI:
         self.style.configure('TCombobox', fieldbackground=entry_bg, foreground=fg)
         self.marked_list.config(bg=entry_bg, fg=fg, selectbackground=ACCENT, selectforeground=bg)
         self.log_text.config(bg=entry_bg, fg=fg, insertbackground=fg)
+        if self.log_popup_text:
+            self.log_popup_text.config(bg=entry_bg, fg=fg, insertbackground=fg)
         # Apply colors to 3D head-position plot
         if hasattr(self, 'map_ax'):
             self.map_fig.set_facecolor(bg)
@@ -1035,10 +1042,31 @@ class MyGUI:
             self.connect_button.config(text="Disconnect")
         self.log(log_message)
 
+    def open_log_popup(self):
+        if self.log_popup:
+            return
+        self.log_popup = tk.Toplevel(self.root)
+        self.log_popup.title("Log")
+        self.log_popup_text = scrolledtext.ScrolledText(
+            self.log_popup, wrap=tk.WORD, width=80, height=30
+        )
+        self.log_popup_text.pack(fill=tk.BOTH, expand=True)
+        self.log_popup_text.insert(tk.END, self.log_text.get("1.0", tk.END))
+        self.log_popup.protocol("WM_DELETE_WINDOW", self.close_log_popup)
+
+    def close_log_popup(self):
+        if self.log_popup:
+            self.log_popup.destroy()
+            self.log_popup = None
+            self.log_popup_text = None
+
     def log(self, message):
         def _do():
             self.log_text.insert(tk.END, message + "\n")
             self.log_text.see(tk.END)
+            if self.log_popup_text:
+                self.log_popup_text.insert(tk.END, message + "\n")
+                self.log_popup_text.see(tk.END)
         self.root.after(0, _do)
 
     def prompt_retry(self, msg):
