@@ -133,6 +133,9 @@ class MyGUI:
         self.marked_dots_head = []
         self.marked_labels_head = []
 
+        self.log_popup = None
+        self.log_popup_text = None
+
         self.setup_ui()
         self.apply_theme()
         self.wasatch.set_dark_mode(self.dark_mode)
@@ -143,6 +146,8 @@ class MyGUI:
         self.paused = False
         self.measure_thread = threading.Thread()
         self.pause_position = None
+        self.log_popup = None
+        self.log_popup_text = None
 
     def setup_ui(self):
 
@@ -155,6 +160,7 @@ class MyGUI:
         for r in range(5):
             self.left_frame.rowconfigure(r, weight=0)
         self.left_frame.rowconfigure(5, weight=1)
+
 
         self.right_frame = ttk.Frame(self.main_frame)
         self.right_frame.grid(row=0, column=1, sticky='nw')
@@ -374,7 +380,6 @@ class MyGUI:
             command=self.connect_spectrometer,
         )
         self.wasatch_connect_button.grid(row=1, column=0, padx=PADX, pady=PADY)
-
         self.troubleshoot_button = ttk.Button(
             self.wasatch_connection_frame,
             text="Troubleshoot/Force connect",
@@ -701,6 +706,8 @@ class MyGUI:
         self.style.configure('TCombobox', fieldbackground=entry_bg, foreground=fg)
         self.marked_list.config(bg=entry_bg, fg=fg, selectbackground=ACCENT, selectforeground=bg)
         self.log_text.config(bg=entry_bg, fg=fg, insertbackground=fg)
+        if self.log_popup_text:
+            self.log_popup_text.config(bg=entry_bg, fg=fg, insertbackground=fg)
         # Apply colors to 3D head-position plot
         if hasattr(self, 'map_ax'):
             self.map_fig.set_facecolor(bg)
@@ -1061,6 +1068,7 @@ class MyGUI:
                 target = dict(bus=bus, address=addr, vid=vid, pid=pid)
                 break
         device = self.wasatch.troubleshoot_connection(target)
+
         if device:
             self.log("Troubleshooting connected to spectrometer")
         else:
@@ -1099,10 +1107,14 @@ class MyGUI:
         if values:
             self.usb_device_combobox.current(0)
 
+
     def log(self, message):
         def _do():
             self.log_text.insert(tk.END, message + "\n")
             self.log_text.see(tk.END)
+            if self.log_popup_text:
+                self.log_popup_text.insert(tk.END, message + "\n")
+                self.log_popup_text.see(tk.END)
         self.root.after(0, _do)
 
     def prompt_retry(self, msg):
@@ -1125,12 +1137,12 @@ class MyGUI:
         elif direction == '\u2193':  # Rear (Y-)
             self.current_position['Y'] -= step
             command = f'G1 Y-{step} F{speed}'
-        elif direction == '\u2190':  # Left (X-)
-            self.current_position['X'] -= step
-            command = f'G1 X-{step} F{speed}'
-        elif direction == '\u2192':  # Right (X+)
+        elif direction == '\u2190':  # Left (X+)
             self.current_position['X'] += step
             command = f'G1 X{step} F{speed}'
+        elif direction == '\u2192':  # Right (X-)
+            self.current_position['X'] -= step
+            command = f'G1 X-{step} F{speed}'
         elif direction == 'Up':  # Up (Z+)
             self.current_position['Z'] += step
             command = f'G1 Z{step} F{speed}'
@@ -1279,6 +1291,7 @@ class MyGUI:
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
         self.map_canvas.draw()
+
         self.wasatch.update_marked_points(self.marked_positions)
 
 
