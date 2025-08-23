@@ -268,6 +268,7 @@ class Wasatch:
         log.info("Starting connection troubleshooting")
 
         # enumerate using WasatchBus
+
         try:
             self.bus = WasatchBus(use_sim=False)
             self.bus.update()
@@ -311,6 +312,7 @@ class Wasatch:
             log.exception("System USB query failed: %s", e)
 
         # attempt multiple connection methods
+
         methods = [
             ("WasatchDevice", WasatchDevice),
             ("WasatchDeviceWrapper", WasatchDeviceWrapper),
@@ -354,6 +356,7 @@ class Wasatch:
             time.sleep(delay)
         log.info("Force-connect attempts exhausted")
         return None
+
 
     def run(self, label):
         if self.device is None:
