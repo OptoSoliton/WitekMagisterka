@@ -59,7 +59,6 @@ class Wasatch:
             self.points_ax.zaxis.set_major_locator(_ticker.MaxNLocator(prune='lower'))
         except Exception:
             pass
-
         self.points_canvas = None
 
         self.points = []
@@ -87,7 +86,6 @@ class Wasatch:
             axis = 'black'
             line_colors = None
 
-
         # spectrum plot
         self.fig.patch.set_facecolor(bg)
         self.ax.set_facecolor(bg)
@@ -99,7 +97,6 @@ class Wasatch:
         if line_colors:
             self.ax.set_prop_cycle(color=line_colors)
         self.ax.grid(color=grid, alpha=0.25)
-
 
         # 3D points plot
         self.points_fig.patch.set_facecolor(bg)
@@ -551,6 +548,7 @@ class Wasatch:
         # use literal string to avoid depending on tkinter alias
         self.fig.subplots_adjust(bottom=0.2)
         self.canvas.get_tk_widget().pack(fill="both", expand=True)
+
 def signal_handler(signal, frame):
     print('\rInterrupted by Ctrl-C...shutting down', end=' ')
     clean_shutdown()

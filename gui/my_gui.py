@@ -73,7 +73,6 @@ class ToolTip:
         fg = TOOLTIP_FG if self.gui and self.gui.dark_mode else "#000000"
         label = tk.Label(tw, text=self.text, background=bg, foreground=fg,
                          relief="solid", borderwidth=1)
-
         label.pack(ipadx=1)
         tw.wm_geometry(f"+{x}+{y}")
 
@@ -157,6 +156,8 @@ class MyGUI:
         # Left and right part of window inside scrollable container
         self.left_frame = ttk.Frame(self.container)
         self.left_frame.grid(row=0, column=0, sticky='nw')
+        self.left_frame.columnconfigure(0, weight=1)
+        self.left_frame.columnconfigure(1, weight=1)
 
         self.right_frame = ttk.Frame(self.container)
         self.right_frame.grid(row=0, column=1, sticky='nw')
@@ -171,10 +172,13 @@ class MyGUI:
         self.marks_frame.grid(row=0, column=2, sticky='nw')
         self.marked_list = tk.Listbox(self.marks_frame, width=25)
         self.marked_list.pack(padx=PADX, pady=PADY)
+        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
+        self.help_button.pack(padx=PADX, pady=(0, PADY))
 
         # Serial connection frame
         self.serial_connection_frame = ttk.LabelFrame(self.left_frame, text="CNC serial connection", **FRAME_KWARGS)
-        self.serial_connection_frame.grid(row=0, column=0, padx=PADX, pady=PADY, sticky="nw")
+        self.serial_connection_frame.grid(row=0, column=0, padx=PADX, pady=PADY, sticky="ew")
+
 
         self.serial_port_label = ttk.Label(self.serial_connection_frame, text="Port COM:")
         self.serial_port_label.grid(row=0, column=0, padx=PADX, pady=PADY)
@@ -188,7 +192,8 @@ class MyGUI:
 
         # Control frame for movement
         self.control_frame = ttk.LabelFrame(self.left_frame, text="CNC control", **FRAME_KWARGS)
-        self.control_frame.grid(row=1, column=0, padx=PADX, pady=PADY, sticky="nw")
+        self.control_frame.grid(row=1, column=0, padx=PADX, pady=PADY, sticky="ew")
+
 
         # Movement buttons
         button = ttk.Button(self.control_frame, text='\u2190', 
@@ -222,7 +227,8 @@ class MyGUI:
 
         # Step and Speed frame
         self.step_speed_frame = ttk.LabelFrame(self.left_frame, text="CNC control parameters", **FRAME_KWARGS)
-        self.step_speed_frame.grid(row=2, column=0, padx=PADX, pady=PADY, sticky="nw")
+        self.step_speed_frame.grid(row=2, column=0, padx=PADX, pady=PADY, sticky="ew")
+
 
         self.step_label = ttk.Label(self.step_speed_frame, text="Step:")
         self.step_label.grid(row=0, column=0, padx=PADX, pady=PADY)
@@ -238,7 +244,8 @@ class MyGUI:
 
         # Position setting and test movement frame
         self.position_frame = ttk.LabelFrame(self.left_frame, text="Position configuration", **FRAME_KWARGS)
-        self.position_frame.grid(row=3, column=0, padx=PADX, pady=PADY, sticky="nw")
+        self.position_frame.grid(row=3, column=0, padx=PADX, pady=PADY, sticky="ew")
+
 
         # Position buttons arranged as 1 3 / 2 4 with 5 on the right
         self.set_button_1 = ttk.Button(self.position_frame, text="Set 1", command=lambda: self.set_position(1))
@@ -282,7 +289,8 @@ class MyGUI:
         
         # Manual command frame
         self.manual_command_frame = ttk.LabelFrame(self.left_frame, text="Manual command", **FRAME_KWARGS)
-        self.manual_command_frame.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="nw")
+        self.manual_command_frame.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="ew")
+
 
         self.manual_command_label = ttk.Label(self.manual_command_frame, text="Command:")
         self.manual_command_label.grid(row=0, column=0, padx=PADX, pady=PADY)
@@ -293,9 +301,51 @@ class MyGUI:
         self.manual_command_button = ttk.Button(self.manual_command_frame, text="Send", command=self.send_manual_command)
         self.manual_command_button.grid(row=0, column=2, padx=PADX, pady=PADY)
 
-        # Log frame
+        # Spectrum plot moved to log position
+        self.spectrum_frame = ttk.LabelFrame(self.left_frame, text="Spectrum", **FRAME_KWARGS)
+        self.spectrum_frame.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="nw")
+        spec_container = ttk.Frame(self.spectrum_frame)
+        spec_container.pack()
+        canvas_holder = ttk.Frame(spec_container)
+        canvas_holder.pack(side="left")
+        self.wasatch.init_spectrum_plot(canvas_holder)
+        nav_frame = ttk.Frame(spec_container)
+        nav_frame.pack(side="right", padx=(PADX, 0))
+        ttk.Button(
+            nav_frame,
+            text="◀",
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis="x"),
+        ).pack()
+        ttk.Button(
+            nav_frame,
+            text="▶",
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis="x"),
+        ).pack()
+        ttk.Button(
+            nav_frame,
+            text="▲",
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis="y"),
+        ).pack()
+        ttk.Button(
+            nav_frame,
+            text="▼",
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis="y"),
+        ).pack()
+        ttk.Button(
+            nav_frame,
+            text="🔍+",
+            command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8),
+        ).pack()
+        ttk.Button(
+            nav_frame,
+            text="🔍-",
+            command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25),
+        ).pack()
+
+        # Log frame aligned next to CNC controls
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
-        self.log_frame.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="nw")
+        self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky="nsew")
+
 
         self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=50)
         self.log_text.pack(fill=tk.BOTH, expand=True)
@@ -410,7 +460,6 @@ class MyGUI:
         self.wasatch_dark_button.grid(row=3, column=0, columnspan=2, padx=PADX, pady=PADY)
         ToolTip(self.wasatch_dark_button, "Record dark reference at current position", self)
 
-
         self.wasatch_light_button = ttk.Button(
             self.wasatch_measure_frame,
             text="Light",
@@ -419,7 +468,6 @@ class MyGUI:
         )
         self.wasatch_light_button.grid(row=3, column=2, columnspan=2, padx=PADX, pady=PADY)
         ToolTip(self.wasatch_light_button, "Record light reference at current position", self)
-
 
         # Progress bar
         self.progress_bar = ttk.Progressbar(self.wasatch_measure_frame, orient="horizontal", length=300,  mode="determinate")
@@ -454,7 +502,6 @@ class MyGUI:
         )
         self.pause_button.grid(row=7, column=0, columnspan=2, padx=PADX, pady=PADY)
         ToolTip(self.pause_button, "Pause scan to take dark and optional light references", self)
-
         self.continue_button = ttk.Button(
             self.wasatch_measure_frame,
             text="Continue",
@@ -481,6 +528,19 @@ class MyGUI:
         self.time_calc_progress = ttk.Progressbar(
             self.wasatch_measure_frame, orient="horizontal", length=300, mode="determinate"
         )
+        self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
+        ToolTip(self.continue_button, "Return to saved position and resume scan", self)
+
+        self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
+        self.estimated_time_label = ttk.Label(
+            self.wasatch_measure_frame, textvariable=self.estimated_time_var
+        )
+        self.estimated_time_label.grid(row=8, column=0, columnspan=4, padx=PADX, pady=PADY)
+
+        self.time_calc_progress = ttk.Progressbar(
+            self.wasatch_measure_frame, orient="horizontal", length=300, mode="determinate"
+        )
+
         self.time_calc_progress.grid(row=9, column=0, columnspan=4, padx=PADX, pady=PADY)
 
         # list of widgets disabled during a long scan
@@ -516,7 +576,6 @@ class MyGUI:
         except Exception:
             pass
         try:
-
             self.map_ax.set_proj_type('ortho')
         except Exception:
             pass
@@ -535,58 +594,6 @@ class MyGUI:
         zoom_frame.pack()
         ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 0.8, True)).pack(side="left")
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
-
-        # Spectrum plot with controls to the right
-
-        self.spectrum_frame = ttk.LabelFrame(
-            self.controls_frame, text="Spectrum", **FRAME_KWARGS
-        )
-        self.spectrum_frame.pack(padx=PADX, pady=PADY, anchor='n')
-        spec_container = ttk.Frame(self.spectrum_frame)
-        spec_container.pack()
-        canvas_holder = ttk.Frame(spec_container)
-        canvas_holder.pack(side="left")
-        self.wasatch.init_spectrum_plot(canvas_holder)
-        nav_frame = ttk.Frame(spec_container)
-        nav_frame.pack(side="right", padx=(PADX, 0))
-
-        ttk.Button(
-            nav_frame,
-            text="◀",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis="x"),
-        ).pack()
-
-        ttk.Button(
-            nav_frame,
-            text="▶",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis="x"),
-        ).pack()
-
-        ttk.Button(
-            nav_frame,
-            text="▲",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis="y"),
-        ).pack()
-
-        ttk.Button(
-            nav_frame,
-            text="▼",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis="y"),
-        ).pack()
-
-        ttk.Button(
-            nav_frame,
-            text="🔍+",
-            command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8),
-        ).pack()
-
-        ttk.Button(
-            nav_frame,
-            text="🔍-",
-            command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25),
-        ).pack()
-        self.help_button = ttk.Button(nav_frame, text="Help", command=self.show_help)
-        self.help_button.pack(pady=(PADY, 0))
 
         self.dark_button = ttk.Button(self.right_frame, text="Dark Mode", command=self.toggle_dark_mode)
         self.dark_button.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="ew")
@@ -664,6 +671,15 @@ class MyGUI:
         self.style.configure('TCombobox', fieldbackground=entry_bg, foreground=fg)
         self.marked_list.config(bg=entry_bg, fg=fg, selectbackground=ACCENT, selectforeground=bg)
         self.log_text.config(bg=entry_bg, fg=fg, insertbackground=fg)
+        # apply colors to 3D head position plot
+        if hasattr(self, 'map_ax'):
+            self.map_fig.set_facecolor(bg)
+            self.map_ax.set_facecolor(frame_bg)
+            for axis in [self.map_ax.xaxis, self.map_ax.yaxis, self.map_ax.zaxis]:
+                axis.label.set_color(fg)
+                axis.set_tick_params(colors=fg)
+            for axis in [self.map_ax.w_xaxis, self.map_ax.w_yaxis, self.map_ax.w_zaxis]:
+                axis.line.set_color(fg)
 
 
     def update_progress(self, progress):
@@ -919,6 +935,7 @@ class MyGUI:
             self.log("Spectrometer connected")
         else:
             self.log("No spectrometer found")
+#USUN JESLI TRZEBA START
 
 
     def update_time_estimate(self):
@@ -1006,6 +1023,7 @@ class MyGUI:
             self.log("Spectrometer connected")
         else:
             self.log("No spectrometer found")
+#USUN JESLI TRZEBA KONIEC
 
     def toggle_connection(self):
         if self.serial.connected:
@@ -1179,7 +1197,16 @@ class MyGUI:
             self.map_ax.set_ylim(min(ys), max(ys))
             self.map_ax.set_zlim(min(zs), max(zs))
         self.map_ax.set_box_aspect([1, 1, 1])
-        self.map_ax.invert_zaxis()
+        # hide overlapping ticks when range collapses
+        if min(ys) == max(ys):
+            self.map_ax.set_yticks([])
+        else:
+            self.map_ax.set_yticks(None)
+        if min(zs) == max(zs):
+            self.map_ax.set_zticks([])
+        else:
+            self.map_ax.set_zticks(None)
+
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
         self.map_ax.set_zlabel('Z')
@@ -1361,6 +1388,7 @@ class MyGUI:
         self.log(
             f"Step sizes: step_x={step_x}, step_y={step_y}, step_z={step_z}"
         )
+
 
         # ensure absolute coordinates and move to starting point
         self.serial.send_gcode('G90')
