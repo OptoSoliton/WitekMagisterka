@@ -307,6 +307,7 @@ class Wasatch:
         return device
 
     def troubleshoot_connection(self, target=None):
+
         """Attempt a variety of low level recovery steps to connect."""
         log.info("Starting connection troubleshooting")
 
@@ -347,6 +348,7 @@ class Wasatch:
                             dev.attach_kernel_driver(intf.bInterfaceNumber)
                         except Exception:
                             pass
+
                         usb.util.dispose_resources(dev)
                     except Exception as ex:
                         log.exception("USB reset failed: %s", ex)
@@ -386,6 +388,7 @@ class Wasatch:
             log.exception("Serial port enumeration failed: %s", e)
 
         # attempt multiple connection methods
+
         methods = [
             ("WasatchDevice", WasatchDevice),
             ("WasatchDeviceWrapper", WasatchDeviceWrapper),
@@ -403,6 +406,7 @@ class Wasatch:
 
         # final forced connection attempts
         device = self.force_connect(target=target)
+
         if device:
             return device
 
@@ -414,6 +418,7 @@ class Wasatch:
         for i in range(attempts):
             log.info("Force-connect attempt %d/%d", i + 1, attempts)
             device = self.connect(target)
+
             if device:
                 log.info("Force-connect succeeded on attempt %d", i + 1)
                 return device
@@ -428,6 +433,7 @@ class Wasatch:
                     )
                 else:
                     dev = usb.core.find(idVendor=0x24aa)
+
                 if dev:
                     log.info("Issuing USB reset to spectrometer")
                     dev.reset()
