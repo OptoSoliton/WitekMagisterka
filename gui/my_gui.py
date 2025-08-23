@@ -156,7 +156,6 @@ class MyGUI:
         self.left_frame.grid(row=0, column=0, sticky='nw')
         self.left_frame.columnconfigure(0, weight=0)
         self.left_frame.columnconfigure(1, weight=0)
-
         self.left_frame.columnconfigure(2, weight=1)
 
         self.right_frame = ttk.Frame(self.main_frame)
@@ -338,7 +337,6 @@ class MyGUI:
         # Marked positions next to spectrum
         self.marks_frame = ttk.LabelFrame(self.left_frame, text="Marked positions", **FRAME_KWARGS)
         self.marks_frame.grid(row=5, column=1, padx=(0, PADX), pady=PADY, sticky="nw")
-
         self.marked_list = tk.Listbox(self.marks_frame, width=25)
         self.marked_list.pack(padx=PADX, pady=PADY)
         self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
@@ -347,10 +345,17 @@ class MyGUI:
         # Log frame aligned next to CNC controls
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
         self.log_frame.grid(row=0, column=2, rowspan=6, padx=PADX, pady=PADY, sticky="nsew")
+        # keep the on-screen log narrow so the full layout fits within 1080x1920
+        self.log_text = scrolledtext.ScrolledText(
+            self.log_frame, wrap=tk.WORD, height=18, width=20
+        )
 
-
-        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=30)
         self.log_text.pack(fill=tk.BOTH, expand=True)
+        # provide a popup to view the full log history without widening the main window
+        self.log_popup_button = ttk.Button(
+            self.log_frame, text="Open log", command=self.open_log_file
+        )
+        self.log_popup_button.pack(padx=PADX, pady=(0, PADY))
 
         self.log_popup_button = ttk.Button(self.log_frame, text="Open log", command=self.open_log_file)
         self.log_popup_button.pack(padx=PADX, pady=(0, PADY))
@@ -358,13 +363,31 @@ class MyGUI:
         # Spectrometer connection frame
         self.wasatch_connection_frame = ttk.LabelFrame(self.controls_frame, text="Wasatch connection", **FRAME_KWARGS)
         self.wasatch_connection_frame.pack(fill='x', padx=PADX, pady=PADY)
+        # allow selecting a specific USB device (port) for the spectrometer
+        self.usb_devices = []
+        self.usb_device_var = tk.StringVar()
+        self.usb_device_combobox = ttk.Combobox(
+            self.wasatch_connection_frame,
+            textvariable=self.usb_device_var,
+            width=40
+        )
+        self.usb_device_combobox.grid(row=0, column=0, columnspan=2, padx=PADX, pady=PADY, sticky="ew")
+        self.refresh_usb_devices()
 
         self.wasatch_connect_button = ttk.Button(
             self.wasatch_connection_frame,
             text="Connect spectrometer",
             command=self.connect_spectrometer,
         )
-        self.wasatch_connect_button.grid(row=0, column=0, padx=PADX, pady=PADY)
+        self.wasatch_connect_button.grid(row=1, column=0, padx=PADX, pady=PADY)
+
+        self.troubleshoot_button = ttk.Button(
+            self.wasatch_connection_frame,
+            text="Troubleshoot/Force connect",
+            command=self.troubleshoot_spectrometer,
+        )
+        self.troubleshoot_button.grid(row=1, column=1, padx=PADX, pady=PADY)
+
 
         self.troubleshoot_button = ttk.Button(
             self.wasatch_connection_frame,
@@ -1026,7 +1049,13 @@ class MyGUI:
 
     def connect_spectrometer(self):
         self.log("Connecting spectrometer...")
-        device = self.wasatch.connect()
+        selection = self.usb_device_combobox.get()
+        target = None
+        for desc, bus, addr, vid, pid in self.usb_devices:
+            if desc == selection:
+                target = dict(bus=bus, address=addr, vid=vid, pid=pid)
+                break
+        device = self.wasatch.connect(target)
         if device:
             self.log("Spectrometer connected")
         else:
@@ -1037,7 +1066,14 @@ class MyGUI:
 
     def _troubleshoot_thread(self):
         self.log("Starting spectrometer troubleshooting...")
-        device = self.wasatch.troubleshoot_connection()
+        selection = self.usb_device_combobox.get()
+        target = None
+        for desc, bus, addr, vid, pid in self.usb_devices:
+            if desc == selection:
+                target = dict(bus=bus, address=addr, vid=vid, pid=pid)
+                break
+        device = self.wasatch.troubleshoot_connection(target)
+
         if device:
             self.log("Troubleshooting connected to spectrometer")
         else:
@@ -1066,6 +1102,16 @@ class MyGUI:
                 subprocess.call(("xdg-open", path))
         except Exception as e:
             messagebox.showerror("Open log", f"Could not open log file: {e}")
+
+    def refresh_usb_devices(self):
+        """Populate the spectrometer port list using detected USB devices."""
+        devices = self.wasatch.list_usb_devices()
+        self.usb_devices = devices
+        values = [d[0] for d in devices]
+        self.usb_device_combobox['values'] = values
+        if values:
+            self.usb_device_combobox.current(0)
+
 
     def log(self, message):
         def _do():

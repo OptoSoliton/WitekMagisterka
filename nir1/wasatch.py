@@ -218,10 +218,53 @@ class Wasatch:
 
         return args
 
-    def connect(self):
-        """Connect to the first available Wasatch spectrometer."""
+    def list_usb_devices(self):
+        """Return a list of connected USB devices with basic details."""
+        devices = []
+        try:
+            import usb.core, usb.util  # type: ignore
+            for dev in usb.core.find(find_all=True):
+                desc = f"VID={dev.idVendor:04x} PID={dev.idProduct:04x}"
+                bus = getattr(dev, 'bus', None)
+                addr = getattr(dev, 'address', None)
+                if bus is not None and addr is not None:
+                    desc += f" bus={bus} addr={addr}"
+                try:
+                    man = usb.util.get_string(dev, dev.iManufacturer) or ""
+                    prod = usb.util.get_string(dev, dev.iProduct) or ""
+                    if man or prod:
+                        desc += f" {man} {prod}".strip()
+                except Exception:
+                    pass
+                devices.append((desc, bus, addr, dev.idVendor, dev.idProduct))
+        except Exception as e:
+            log.exception("USB device listing failed: %s", e)
+        return devices
+
+    def connect(self, target=None):
+        """Connect to a Wasatch spectrometer, optionally specifying a USB target."""
         if self.device is not None:
             return self.device
+
+        if target:
+            try:
+                import usb.core, usb.util  # type: ignore
+                dev = usb.core.find(
+                    idVendor=target.get('vid'),
+                    idProduct=target.get('pid'),
+                    bus=target.get('bus'),
+                    address=target.get('address'),
+                )
+                if dev:
+                    usb_dev = RealUSBDevice(dev)
+                    device = WasatchDevice(usb_dev)
+                    ok = device.connect()
+                    if ok:
+                        self.device = device
+                        log.info("Connected to selected USB device")
+                        return device
+            except Exception as e:
+                log.exception("Direct USB connect failed: %s", e)
 
         if self.bus is None:
             log.debug("instantiating WasatchBus")
@@ -263,12 +306,12 @@ class Wasatch:
         log.info("Spectrometer connected")
         return device
 
-    def troubleshoot_connection(self):
+    def troubleshoot_connection(self, target=None):
+
         """Attempt a variety of low level recovery steps to connect."""
         log.info("Starting connection troubleshooting")
 
         # enumerate using WasatchBus
-
         try:
             self.bus = WasatchBus(use_sim=False)
             self.bus.update()
@@ -288,10 +331,24 @@ class Wasatch:
                     "USB vid=0x%04x pid=0x%04x bus=%s addr=%s", dev.idVendor, dev.idProduct,
                     getattr(dev, 'bus', '?'), getattr(dev, 'address', '?')
                 )
-                if dev.idVendor == 0x24aa:
+                if target and dev.idVendor == target.get('vid') and dev.idProduct == target.get('pid'):
                     try:
-                        log.info("Attempting USB reset on spectrometer")
+                        log.info("Attempting USB reset on targeted spectrometer")
+                        if dev.is_kernel_driver_active(0):
+                            log.info("Detaching kernel driver")
+                            dev.detach_kernel_driver(0)
                         dev.reset()
+                        dev.set_configuration()
+                        cfg = dev.get_active_configuration()
+                        intf = cfg[(0, 0)]
+                        usb.util.claim_interface(dev, intf.bInterfaceNumber)
+                        log.info("Claimed interface %d", intf.bInterfaceNumber)
+                        usb.util.release_interface(dev, intf.bInterfaceNumber)
+                        try:
+                            dev.attach_kernel_driver(intf.bInterfaceNumber)
+                        except Exception:
+                            pass
+
                         usb.util.dispose_resources(dev)
                     except Exception as ex:
                         log.exception("USB reset failed: %s", ex)
@@ -308,8 +365,27 @@ class Wasatch:
                        'Get-PnpDevice -PresentOnly | Where-Object {$_.InstanceId -like "*VID_24AA*"}']
                 out = subprocess.check_output(cmd, text=True)
                 log.info("PnpDevice output:\n%s", out)
+                try:
+                    toggle = [
+                        'Get-PnpDevice -InstanceId "USB\\VID_24AA*" | Disable-PnpDevice -Confirm:$false',
+                        'Start-Sleep -Seconds 1',
+                        'Get-PnpDevice -InstanceId "USB\\VID_24AA*" | Enable-PnpDevice -Confirm:$false'
+                    ]
+                    out = subprocess.check_output(['powershell', '-Command', ';'.join(toggle)], text=True)
+                    log.info("USB port toggle output:\n%s", out)
+                except Exception as ex:
+                    log.exception("USB port toggle failed: %s", ex)
         except Exception as e:
             log.exception("System USB query failed: %s", e)
+
+        # list available COM ports for manual selection
+        try:
+            import serial.tools.list_ports  # type: ignore
+            ports = list(serial.tools.list_ports.comports())
+            for p in ports:
+                log.info("COM port %s %s", p.device, p.description)
+        except Exception as e:
+            log.exception("Serial port enumeration failed: %s", e)
 
         # attempt multiple connection methods
 
@@ -329,24 +405,35 @@ class Wasatch:
                 log.exception("%s connection failed: %s", name, e)
 
         # final forced connection attempts
-        device = self.force_connect()
+        device = self.force_connect(target=target)
+
         if device:
             return device
 
         log.info("Troubleshooting finished - no spectrometer connected")
         return None
 
-    def force_connect(self, attempts: int = 3, delay: float = 1.0):
+    def force_connect(self, attempts: int = 3, delay: float = 1.0, target=None):
         """Repeatedly try to connect, resetting USB between attempts."""
         for i in range(attempts):
             log.info("Force-connect attempt %d/%d", i + 1, attempts)
-            device = self.connect()
+            device = self.connect(target)
+
             if device:
                 log.info("Force-connect succeeded on attempt %d", i + 1)
                 return device
             try:
                 import usb.core, usb.util  # type: ignore
-                dev = usb.core.find(idVendor=0x24aa)
+                if target:
+                    dev = usb.core.find(
+                        idVendor=target.get('vid'),
+                        idProduct=target.get('pid'),
+                        bus=target.get('bus'),
+                        address=target.get('address'),
+                    )
+                else:
+                    dev = usb.core.find(idVendor=0x24aa)
+
                 if dev:
                     log.info("Issuing USB reset to spectrometer")
                     dev.reset()
@@ -356,7 +443,6 @@ class Wasatch:
             time.sleep(delay)
         log.info("Force-connect attempts exhausted")
         return None
-
 
     def run(self, label):
         if self.device is None:
