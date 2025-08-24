@@ -159,6 +159,8 @@ class MyGUI:
         self.measure_thread = threading.Thread()
         self.pause_position = None
 
+        self.auto_update_map()
+
     def setup_ui(self):
 
         # Left and right part of window inside scrollable container
@@ -327,12 +329,30 @@ class MyGUI:
 
         nav_frame = ttk.Frame(spec_container)
         nav_frame.pack(side='right', padx=(PADX, 0), fill='y')
-        ttk.Button(nav_frame, text="◀", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='x')).pack()
-        ttk.Button(nav_frame, text="▶", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='x')).pack()
-        ttk.Button(nav_frame, text="▲", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='y')).pack()
-        ttk.Button(nav_frame, text="▼", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='y')).pack()
-        ttk.Button(nav_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8)).pack()
-        ttk.Button(nav_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25)).pack()
+        ttk.Button(
+            nav_frame, text="◀",
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='x')
+        ).pack()
+        ttk.Button(
+            nav_frame, text="▶",
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='x')
+        ).pack()
+        ttk.Button(
+            nav_frame, text="▲",
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='y')
+        ).pack()
+        ttk.Button(
+            nav_frame, text="▼",
+            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='y')
+        ).pack()
+        ttk.Button(
+            nav_frame, text="🔍+",
+            command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8)
+        ).pack()
+        ttk.Button(
+            nav_frame, text="🔍-",
+            command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25)
+        ).pack()
 
         # Marked positions (po prawej)
         self.marks_frame = ttk.LabelFrame(self.bottom_row, text="Marked positions", **FRAME_KWARGS)
@@ -432,8 +452,8 @@ class MyGUI:
         self.set_max_spectra_button.grid(row=1, column=8, padx=PADX, pady=(PADY, PADY))
 
         for c in range(9):
-
-            self.wasatch_parameters_frame.grid_columnconfigure(c, weight=1)
+            minsize = 120 if c in (0, 3, 6) else 0
+            self.wasatch_parameters_frame.grid_columnconfigure(c, weight=1, minsize=minsize)
 
         # Measuring frame
         self.wasatch_measure_frame = ttk.LabelFrame(self.controls_frame, text="Measuring", **FRAME_KWARGS)
@@ -566,7 +586,7 @@ class MyGUI:
         # 3D head position (lewy wykres)
         self.map_frame = ttk.LabelFrame(self.plots_frame, text="Head position 3D", **FRAME_KWARGS)
         self.map_frame.grid(row=0, column=0, sticky='nsew', padx=(0, PADX))
-        self.map_fig = Figure(figsize=(4, 4), dpi=100)
+        self.map_fig = Figure(figsize=(4, 3), dpi=100)
 
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
         try:
@@ -1021,6 +1041,14 @@ class MyGUI:
         self.wasatch.update_points_plot()
 
         self.root.after(0, _do)
+
+    def auto_update_map(self):
+        self.update_map_position(
+            self.current_position['X'],
+            self.current_position['Y'],
+            self.current_position['Z']
+        )
+        self.root.after(100, self.auto_update_map)
 
     def mark_current_position(self):
         idx = len(self.marked_positions) + 1
