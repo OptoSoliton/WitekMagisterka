@@ -373,54 +373,55 @@ class MyGUI:
         # Generate default output path on startup
         self.ensure_file_path()
 
-        # Wasatch parameters
+        # Wasatch parameters, arranged in two compact rows
         self.wasatch_parameters_frame = ttk.LabelFrame(self.controls_frame, text="Parameters", **FRAME_KWARGS)
         self.wasatch_parameters_frame.pack(fill='x', padx=PADX, pady=1)
 
-        # Integration time control
+        # first row: integration time and scans to average
         self.integration_time_label = ttk.Label(self.wasatch_parameters_frame, text="Integration Time (ms):")
-        self.integration_time_label.grid(row=0, column=0, padx=PADX, pady=PADY)
+        self.integration_time_label.grid(row=0, column=0, padx=PADX, pady=(PADY, 0), sticky="w")
         self.integration_time_entry = ttk.Entry(self.wasatch_parameters_frame)
-        self.integration_time_entry.grid(row=0, column=1, padx=PADX, pady=PADY)
-        self.integration_time_entry.insert(tk.END, str(self.integration_time))  # Default value
-
+        self.integration_time_entry.grid(row=0, column=1, padx=PADX, pady=(PADY, 0), sticky="ew")
+        self.integration_time_entry.insert(tk.END, str(self.integration_time))
         self.set_integration_time_button = ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_integration_time)
-        self.set_integration_time_button.grid(row=0, column=2, padx=PADX, pady=PADY)
+        self.set_integration_time_button.grid(row=0, column=2, padx=PADX, pady=(PADY, 0))
 
-        # Scans to average control
         self.scans_to_average_label = ttk.Label(self.wasatch_parameters_frame, text="Scans to Average:")
-        self.scans_to_average_label.grid(row=1, column=0, padx=PADX, pady=PADY)
+        self.scans_to_average_label.grid(row=0, column=3, padx=PADX, pady=(PADY, 0), sticky="w")
         self.scans_to_average_entry = ttk.Entry(self.wasatch_parameters_frame)
-        self.scans_to_average_entry.grid(row=1, column=1, padx=PADX, pady=PADY)
-        self.scans_to_average_entry.insert(tk.END, str(self.scans_to_average))  # Default value
-
+        self.scans_to_average_entry.grid(row=0, column=4, padx=PADX, pady=(PADY, 0), sticky="ew")
+        self.scans_to_average_entry.insert(tk.END, str(self.scans_to_average))
         self.set_scans_to_average_button = ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_scans_to_average)
-        self.set_scans_to_average_button.grid(row=1, column=2, padx=PADX, pady=PADY)
+        self.set_scans_to_average_button.grid(row=0, column=5, padx=PADX, pady=(PADY, 0))
 
-        # Boxcar half width
+        # second row: boxcar half width and delay
         self.boxcar_half_width_label = ttk.Label(self.wasatch_parameters_frame, text="Boxcar half width:")
-        self.boxcar_half_width_label.grid(row=2, column=0, padx=PADX, pady=PADY)
+        self.boxcar_half_width_label.grid(row=1, column=0, padx=PADX, pady=(PADY, 0), sticky="w")
         self.boxcar_half_width_entry = ttk.Entry(self.wasatch_parameters_frame)
-        self.boxcar_half_width_entry.grid(row=2, column=1, padx=PADX, pady=PADY)
+        self.boxcar_half_width_entry.grid(row=1, column=1, padx=PADX, pady=(PADY, 0), sticky="ew")
         self.boxcar_half_width_entry.insert(tk.END, str(self.boxcar_half_width))
-        ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_boxcar_half_width).grid(row=2, column=2, padx=PADX, pady=PADY)
+        self.set_boxcar_half_width_button = ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_boxcar_half_width)
+        self.set_boxcar_half_width_button.grid(row=1, column=2, padx=PADX, pady=(PADY, 0))
 
-        # Delay ms
         self.delay_ms_label = ttk.Label(self.wasatch_parameters_frame, text="Delay (ms):")
-        self.delay_ms_label.grid(row=3, column=0, padx=PADX, pady=PADY)
+        self.delay_ms_label.grid(row=1, column=3, padx=PADX, pady=(PADY, 0), sticky="w")
         self.delay_ms_entry = ttk.Entry(self.wasatch_parameters_frame)
-        self.delay_ms_entry.grid(row=3, column=1, padx=PADX, pady=PADY)
+        self.delay_ms_entry.grid(row=1, column=4, padx=PADX, pady=(PADY, 0), sticky="ew")
         self.delay_ms_entry.insert(tk.END, str(self.delay_ms))
-        ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_delay_ms).grid(row=3, column=2, padx=PADX, pady=PADY)
+        self.set_delay_ms_button = ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_delay_ms)
+        self.set_delay_ms_button.grid(row=1, column=5, padx=PADX, pady=(PADY, 0))
 
+        # third row: max spectra
         self.max_spectra_label = ttk.Label(self.wasatch_parameters_frame, text="Max Spectra:")
-        self.max_spectra_label.grid(row=4, column=0, padx=PADX, pady=PADY)
+        self.max_spectra_label.grid(row=2, column=0, padx=PADX, pady=(PADY, PADY), sticky="w")
         self.max_spectra_entry = ttk.Entry(self.wasatch_parameters_frame)
-        self.max_spectra_entry.grid(row=4, column=1, padx=PADX, pady=PADY)
-        self.max_spectra_entry.insert(tk.END, str(self.max_spectra))  # Default value
-
+        self.max_spectra_entry.grid(row=2, column=1, padx=PADX, pady=(PADY, PADY), sticky="ew")
+        self.max_spectra_entry.insert(tk.END, str(self.max_spectra))
         self.set_max_spectra_button = ttk.Button(self.wasatch_parameters_frame, text="Set", command=self.set_max_spectra)
-        self.set_max_spectra_button.grid(row=4, column=2, padx=PADX, pady=PADY)
+        self.set_max_spectra_button.grid(row=2, column=2, padx=PADX, pady=(PADY, PADY))
+
+        for c in range(6):
+            self.wasatch_parameters_frame.grid_columnconfigure(c, weight=1)
 
         # Measuring frame
         self.wasatch_measure_frame = ttk.LabelFrame(self.controls_frame, text="Measuring", **FRAME_KWARGS)
