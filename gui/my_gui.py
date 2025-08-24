@@ -367,6 +367,7 @@ class MyGUI:
         self.file_path_button = ttk.Button(self.io_frame, text="Browse", command=self.browse_file_path)
         self.file_path_button.grid(row=0, column=2, padx=PADX, pady=PADY)
 
+
         self.io_frame.grid_columnconfigure(1, weight=1)
 
         # Generate default output path on startup
@@ -385,6 +386,7 @@ class MyGUI:
         self.set_integration_time_button = ttk.Button(
             self.wasatch_parameters_frame, text="Set", command=self.set_integration_time
         )
+
         self.set_integration_time_button.grid(row=0, column=2, padx=PADX, pady=(PADY, 0))
 
         self.scans_to_average_label = ttk.Label(self.wasatch_parameters_frame, text="Scans to Average:")
@@ -418,6 +420,7 @@ class MyGUI:
         )
         self.set_delay_ms_button.grid(row=1, column=5, padx=PADX, pady=(PADY, PADY))
 
+        # third row: max spectra
         self.max_spectra_label = ttk.Label(self.wasatch_parameters_frame, text="Max Spectra:")
         self.max_spectra_label.grid(row=1, column=6, padx=PADX, pady=(PADY, PADY), sticky="w")
         self.max_spectra_entry = ttk.Entry(self.wasatch_parameters_frame)
@@ -429,6 +432,7 @@ class MyGUI:
         self.set_max_spectra_button.grid(row=1, column=8, padx=PADX, pady=(PADY, PADY))
 
         for c in range(9):
+
             self.wasatch_parameters_frame.grid_columnconfigure(c, weight=1)
 
         # Measuring frame
