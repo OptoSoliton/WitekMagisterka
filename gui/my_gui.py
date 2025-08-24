@@ -100,11 +100,21 @@ class MyGUI:
         self.vscroll.pack(side="right", fill="y")
 
         self.container = ttk.Frame(self.canvas)
-        self.canvas.create_window((0, 0), window=self.container, anchor='nw')
+        self.container_window = self.canvas.create_window((0, 0), window=self.container, anchor='nw')
         self.container.bind(
             '<Configure>',
             lambda e: self.canvas.configure(scrollregion=self.canvas.bbox('all'))
         )
+        self.canvas.bind(
+            '<Configure>',
+            lambda e: self.canvas.itemconfigure(self.container_window, width=e.width)
+        )
+
+        # allow right frame to expand more than left and disable stray third column
+        self.container.grid_columnconfigure(0, weight=1)
+        self.container.grid_columnconfigure(1, weight=2)
+        self.container.grid_columnconfigure(2, weight=0)
+        self.container.grid_rowconfigure(0, weight=1)
 
         self.style = ttk.Style(self.root)
         self.style.theme_use('clam')
@@ -153,26 +163,21 @@ class MyGUI:
 
         # Left and right part of window inside scrollable container
         self.left_frame = ttk.Frame(self.container)
-        self.left_frame.grid(row=0, column=0, sticky='nw')
-        self.left_frame.columnconfigure(0, weight=1)
-        self.left_frame.columnconfigure(1, weight=1)
+        self.left_frame.grid(row=0, column=0, sticky='nsew')
+        self.left_frame.grid_columnconfigure(0, weight=1)
+        self.left_frame.grid_columnconfigure(1, weight=0, minsize=360)
 
         self.right_frame = ttk.Frame(self.container)
-        self.right_frame.grid(row=0, column=1, sticky='nw')
+        self.right_frame.grid(row=0, column=1, sticky='nsew')
+        self.right_frame.grid_columnconfigure(0, weight=0)
+        self.right_frame.grid_columnconfigure(1, weight=1)
+        self.right_frame.grid_rowconfigure(0, weight=1)
 
         # split right side into controls and plots to avoid oversized grid rows
         self.controls_frame = ttk.Frame(self.right_frame)
         self.controls_frame.grid(row=0, column=0, sticky='nw')
         self.plots_frame = ttk.Frame(self.right_frame)
-        self.plots_frame.grid(row=0, column=1, sticky='ne')
-
-        # list of marked positions on the far right
-        self.marks_frame = ttk.LabelFrame(self.container, text="Marked positions", **FRAME_KWARGS)
-        self.marks_frame.grid(row=0, column=2, sticky='nw')
-        self.marked_list = tk.Listbox(self.marks_frame, width=25)
-        self.marked_list.pack(padx=PADX, pady=PADY)
-        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
-        self.help_button.pack(padx=PADX, pady=(0, PADY))
+        self.plots_frame.grid(row=0, column=1, sticky='nsew')
 
         # Serial connection frame
         self.serial_connection_frame = ttk.LabelFrame(self.left_frame, text="CNC serial connection", **FRAME_KWARGS)
@@ -337,9 +342,10 @@ class MyGUI:
 
         # Log frame aligned next to CNC controls
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
-        self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky="nsew")
+        self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky='ns')
+        self.log_frame.grid_propagate(False)
 
-        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=50)
+        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=40)
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
         # Spectrometer connection frame
@@ -536,7 +542,7 @@ class MyGUI:
 
         # 3D head position preview
         self.map_frame = ttk.LabelFrame(self.plots_frame, text="Head position 3D", **FRAME_KWARGS)
-        self.map_frame.pack(padx=PADX, pady=PADY)
+        self.map_frame.pack(fill='both', expand=True, padx=PADX, pady=PADY)
         self.map_fig = Figure(figsize=(2.5, 2.5), dpi=100)
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
         try:
@@ -551,19 +557,27 @@ class MyGUI:
             pass
         self.map_canvas = FigureCanvasTkAgg(self.map_fig, master=self.map_frame)
         self.map_canvas.draw()
-        self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
+        self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.position_label = ttk.Label(self.map_frame, text="X:0 Y:0 Z:0")
         self.position_label.pack()
         ttk.Button(self.map_frame, text="Mark position", command=self.mark_current_position).pack(pady=(0, PADY))
 
         # Points preview under head position
         self.points_frame = ttk.LabelFrame(self.plots_frame, text="Scan points", **FRAME_KWARGS)
-        self.points_frame.pack(padx=PADX, pady=PADY)
+        self.points_frame.pack(fill='both', expand=True, padx=PADX, pady=PADY)
         self.wasatch.init_points_plot(self.points_frame)
         zoom_frame = ttk.Frame(self.points_frame)
         zoom_frame.pack()
         ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 0.8, True)).pack(side="left")
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
+
+        # list of marked positions next to plots
+        self.marks_frame = ttk.LabelFrame(self.plots_frame, text="Marked positions", **FRAME_KWARGS)
+        self.marks_frame.pack(fill='both', expand=True, padx=PADX, pady=PADY)
+        self.marked_list = tk.Listbox(self.marks_frame, width=25)
+        self.marked_list.pack(padx=PADX, pady=PADY, fill='both', expand=True)
+        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
+        self.help_button.pack(padx=PADX, pady=(0, PADY))
 
 
         self.dark_button = ttk.Button(self.right_frame, text="Dark Mode", command=self.toggle_dark_mode)
@@ -648,7 +662,6 @@ class MyGUI:
             for axis in [self.map_ax.xaxis, self.map_ax.yaxis, self.map_ax.zaxis]:
                 axis.label.set_color(fg)
                 axis.set_tick_params(colors=fg)
-            for axis in [self.map_ax.w_xaxis, self.map_ax.w_yaxis, self.map_ax.w_zaxis]:
                 axis.line.set_color(fg)
 
     def update_progress(self, progress):
