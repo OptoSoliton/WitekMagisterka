@@ -155,7 +155,8 @@ class MyGUI:
         self.left_frame = ttk.Frame(self.container)
         self.left_frame.grid(row=0, column=0, sticky='nw')
         self.left_frame.columnconfigure(0, weight=1)
-        self.left_frame.columnconfigure(1, weight=1)
+        self.left_frame.columnconfigure(1, weight=0, minsize=260)
+        self.left_frame.columnconfigure(2, weight=0)
 
         self.right_frame = ttk.Frame(self.container)
         self.right_frame.grid(row=0, column=1, sticky='nw')
@@ -165,14 +166,6 @@ class MyGUI:
         self.controls_frame.grid(row=0, column=0, sticky='nw')
         self.plots_frame = ttk.Frame(self.right_frame)
         self.plots_frame.grid(row=0, column=1, sticky='ne')
-
-        # list of marked positions on the far right
-        self.marks_frame = ttk.LabelFrame(self.container, text="Marked positions", **FRAME_KWARGS)
-        self.marks_frame.grid(row=0, column=2, sticky='nw')
-        self.marked_list = tk.Listbox(self.marks_frame, width=25)
-        self.marked_list.pack(padx=PADX, pady=PADY)
-        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
-        self.help_button.pack(padx=PADX, pady=(0, PADY))
 
         # Serial connection frame
         self.serial_connection_frame = ttk.LabelFrame(self.left_frame, text="CNC serial connection", **FRAME_KWARGS)
@@ -294,52 +287,46 @@ class MyGUI:
         self.manual_command_button = ttk.Button(self.manual_command_frame, text="Send", command=self.send_manual_command)
         self.manual_command_button.grid(row=0, column=2, padx=PADX, pady=PADY)
 
-        # Spectrum plot moved to log position
-        self.spectrum_frame = ttk.LabelFrame(self.left_frame, text="Spectrum", **FRAME_KWARGS)
-        self.spectrum_frame.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="nw")
+        # --- DÓŁ LEWEJ KOLUMNY: Spectrum + Marked positions obok siebie ---
+        self.bottom_row = ttk.Frame(self.left_frame)
+        self.bottom_row.grid(row=5, column=0, sticky='nsew')
+        self.left_frame.rowconfigure(5, weight=1)
+        self.bottom_row.columnconfigure(0, weight=1)
+        self.bottom_row.columnconfigure(1, weight=0, minsize=260)
+        self.bottom_row.rowconfigure(0, weight=1)
+
+        # Spectrum (po lewej)
+        self.spectrum_frame = ttk.LabelFrame(self.bottom_row, text="Spectrum", **FRAME_KWARGS)
+        self.spectrum_frame.grid(row=0, column=0, padx=PADX, pady=PADY, sticky='nsew')
         spec_container = ttk.Frame(self.spectrum_frame)
-        spec_container.pack()
+        spec_container.pack(fill='both', expand=True)
         canvas_holder = ttk.Frame(spec_container)
-        canvas_holder.pack(side="left")
+        canvas_holder.pack(side='left', fill='both', expand=True)
         self.wasatch.init_spectrum_plot(canvas_holder)
         nav_frame = ttk.Frame(spec_container)
-        nav_frame.pack(side="right", padx=(PADX, 0))
-        ttk.Button(
-            nav_frame,
-            text="◀",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis="x"),
-        ).pack()
-        ttk.Button(
-            nav_frame,
-            text="▶",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis="x"),
-        ).pack()
-        ttk.Button(
-            nav_frame,
-            text="▲",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis="y"),
-        ).pack()
-        ttk.Button(
-            nav_frame,
-            text="▼",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis="y"),
-        ).pack()
-        ttk.Button(
-            nav_frame,
-            text="🔍+",
-            command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8),
-        ).pack()
-        ttk.Button(
-            nav_frame,
-            text="🔍-",
-            command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25),
-        ).pack()
+        nav_frame.pack(side='right', padx=(PADX, 0), fill='y')
+        ttk.Button(nav_frame, text="◀", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='x')).pack()
+        ttk.Button(nav_frame, text="▶", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='x')).pack()
+        ttk.Button(nav_frame, text="▲", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='y')).pack()
+        ttk.Button(nav_frame, text="▼", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='y')).pack()
+        ttk.Button(nav_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8)).pack()
+        ttk.Button(nav_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25)).pack()
+
+        # Marked positions (po prawej)
+        self.marks_frame = ttk.LabelFrame(self.bottom_row, text="Marked positions", **FRAME_KWARGS)
+        self.marks_frame.grid(row=0, column=1, padx=PADX, pady=PADY, sticky='nsew')
+        self.marked_list = tk.Listbox(self.marks_frame)
+        self.marked_list.pack(padx=PADX, pady=PADY, fill='both', expand=True)
+        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
+        self.help_button.pack(padx=PADX, pady=(0, PADY))
 
         # Log frame aligned next to CNC controls
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
-        self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky="nsew")
+        self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky='n')
+        self.log_frame.configure(width=260)
+        self.log_frame.grid_propagate(False)
 
-        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=50)
+        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=26)
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
         # Spectrometer connection frame
@@ -648,7 +635,7 @@ class MyGUI:
             for axis in [self.map_ax.xaxis, self.map_ax.yaxis, self.map_ax.zaxis]:
                 axis.label.set_color(fg)
                 axis.set_tick_params(colors=fg)
-            for axis in [self.map_ax.w_xaxis, self.map_ax.w_yaxis, self.map_ax.w_zaxis]:
+            for axis in [self.map_ax.xaxis, self.map_ax.yaxis, self.map_ax.zaxis]:
                 axis.line.set_color(fg)
 
     def update_progress(self, progress):
