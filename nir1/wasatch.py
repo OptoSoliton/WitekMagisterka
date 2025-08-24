@@ -537,7 +537,7 @@ class Wasatch:
         self.points_canvas = FigureCanvasTkAgg(self.points_fig, master=frame)
         self.points_canvas.draw()
         # use literal string to avoid depending on tkinter alias
-        self.points_canvas.get_tk_widget().pack(fill="both", expand=False)
+        self.points_canvas.get_tk_widget().pack(fill="both", expand=True)
 
     def init_spectrum_plot(self, frame):
         if self.canvas:
