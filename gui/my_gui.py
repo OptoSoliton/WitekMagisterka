@@ -165,13 +165,19 @@ class MyGUI:
         self.left_frame = ttk.Frame(self.container)
         self.left_frame.grid(row=0, column=0, sticky='nsew')
         self.left_frame.grid_columnconfigure(0, weight=1)
-        self.left_frame.grid_columnconfigure(1, weight=0, minsize=360)
+        self.left_frame.grid_columnconfigure(1, weight=0, minsize=280)
+        self.left_frame.grid_columnconfigure(2, weight=1)
+        self.left_frame.grid_rowconfigure(0, weight=0)
+        self.left_frame.grid_rowconfigure(5, weight=1)
+
 
         self.right_frame = ttk.Frame(self.container)
         self.right_frame.grid(row=0, column=1, sticky='nsew')
         self.right_frame.grid_columnconfigure(0, weight=0)
         self.right_frame.grid_columnconfigure(1, weight=1)
         self.right_frame.grid_rowconfigure(0, weight=1)
+        self.right_frame.grid_rowconfigure(1, weight=0)
+
 
         # split right side into controls and plots to avoid oversized grid rows
         self.controls_frame = ttk.Frame(self.right_frame)
@@ -301,7 +307,7 @@ class MyGUI:
 
         # Spectrum plot moved to log position
         self.spectrum_frame = ttk.LabelFrame(self.left_frame, text="Spectrum", **FRAME_KWARGS)
-        self.spectrum_frame.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="nw")
+        self.spectrum_frame.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="nsew")
         spec_container = ttk.Frame(self.spectrum_frame)
         spec_container.pack()
         canvas_holder = ttk.Frame(spec_container)
@@ -340,12 +346,20 @@ class MyGUI:
             command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25),
         ).pack()
 
+        self.marks_frame = ttk.LabelFrame(self.left_frame, text="Marked positions", **FRAME_KWARGS)
+        self.marks_frame.grid(row=5, column=2, padx=PADX, pady=PADY, sticky='nsew')
+        self.marked_list = tk.Listbox(self.marks_frame)
+        self.marked_list.pack(padx=PADX, pady=PADY, fill='both', expand=True)
+        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
+        self.help_button.pack(padx=PADX, pady=(0, PADY))
+
         # Log frame aligned next to CNC controls
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
         self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky='ns')
         self.log_frame.grid_propagate(False)
 
-        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=40)
+        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=34)
+
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
         # Spectrometer connection frame
@@ -571,17 +585,9 @@ class MyGUI:
         ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 0.8, True)).pack(side="left")
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
 
-        # list of marked positions next to plots
-        self.marks_frame = ttk.LabelFrame(self.plots_frame, text="Marked positions", **FRAME_KWARGS)
-        self.marks_frame.pack(fill='both', expand=True, padx=PADX, pady=PADY)
-        self.marked_list = tk.Listbox(self.marks_frame, width=25)
-        self.marked_list.pack(padx=PADX, pady=PADY, fill='both', expand=True)
-        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
-        self.help_button.pack(padx=PADX, pady=(0, PADY))
-
 
         self.dark_button = ttk.Button(self.right_frame, text="Dark Mode", command=self.toggle_dark_mode)
-        self.dark_button.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="ew")
+        self.dark_button.grid(row=1, column=0, columnspan=2, padx=PADX, pady=PADY, sticky='ew')
         ToolTip(self.dark_button, "Toggle dark theme", self)
 
         self.calculate_predicted_points()
