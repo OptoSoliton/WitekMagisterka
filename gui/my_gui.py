@@ -5,9 +5,6 @@ import time
 import threading
 import numpy as np
 import logging
-import os
-import sys
-import subprocess
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure  # required for embedded plots
 
@@ -37,7 +34,6 @@ LINE_COLORS = ['#60A5FA', '#34D399', '#F472B6', '#A78BFA',
                '#F59E0B', '#F87171', '#22D3EE', '#93C5FD']
 
 
-
 class TkLogHandler(logging.Handler):
     """Forward logging records to the GUI log window."""
 
@@ -61,7 +57,6 @@ class ToolTip:
         self.text = text
         self.tip = None
         self.gui = gui
-
         widget.bind("<Enter>", self.show)
         widget.bind("<Leave>", self.hide)
 
@@ -92,14 +87,24 @@ class MyGUI:
         self.root.title("CNC & Wasatch Controller")
         # default to Full HD layout to keep controls and plots visible
         self.root.geometry("1920x1080")
-        self.root.resizable(True, True)
         try:
             self.root.state('zoomed')
         except Exception:
             pass
 
-        self.main_frame = ttk.Frame(self.root)
-        self.main_frame.pack(fill="both", expand=True)
+        # scrollable container so every widget is accessible even on small screens
+        self.canvas = tk.Canvas(self.root)
+        self.vscroll = ttk.Scrollbar(self.root, orient='vertical', command=self.canvas.yview)
+        self.canvas.configure(yscrollcommand=self.vscroll.set)
+        self.canvas.pack(side="left", fill="both", expand=True)
+        self.vscroll.pack(side="right", fill="y")
+
+        self.container = ttk.Frame(self.canvas)
+        self.canvas.create_window((0, 0), window=self.container, anchor='nw')
+        self.container.bind(
+            '<Configure>',
+            lambda e: self.canvas.configure(scrollregion=self.canvas.bbox('all'))
+        )
 
         self.style = ttk.Style(self.root)
         self.style.theme_use('clam')
@@ -133,9 +138,6 @@ class MyGUI:
         self.marked_dots_head = []
         self.marked_labels_head = []
 
-        self.log_popup = None
-        self.log_popup_text = None
-
         self.setup_ui()
         self.apply_theme()
         self.wasatch.set_dark_mode(self.dark_mode)
@@ -146,23 +148,16 @@ class MyGUI:
         self.paused = False
         self.measure_thread = threading.Thread()
         self.pause_position = None
-        self.log_popup = None
-        self.log_popup_text = None
 
     def setup_ui(self):
 
-        # Left and right part of window
-        self.left_frame = ttk.Frame(self.main_frame)
+        # Left and right part of window inside scrollable container
+        self.left_frame = ttk.Frame(self.container)
         self.left_frame.grid(row=0, column=0, sticky='nw')
         self.left_frame.columnconfigure(0, weight=1)
-        self.left_frame.columnconfigure(1, weight=0)
-        self.left_frame.columnconfigure(2, weight=0)
-        for r in range(5):
-            self.left_frame.rowconfigure(r, weight=0)
-        self.left_frame.rowconfigure(5, weight=1)
+        self.left_frame.columnconfigure(1, weight=1)
 
-
-        self.right_frame = ttk.Frame(self.main_frame)
+        self.right_frame = ttk.Frame(self.container)
         self.right_frame.grid(row=0, column=1, sticky='nw')
 
         # split right side into controls and plots to avoid oversized grid rows
@@ -171,10 +166,17 @@ class MyGUI:
         self.plots_frame = ttk.Frame(self.right_frame)
         self.plots_frame.grid(row=0, column=1, sticky='ne')
 
+        # list of marked positions on the far right
+        self.marks_frame = ttk.LabelFrame(self.container, text="Marked positions", **FRAME_KWARGS)
+        self.marks_frame.grid(row=0, column=2, sticky='nw')
+        self.marked_list = tk.Listbox(self.marks_frame, width=25)
+        self.marked_list.pack(padx=PADX, pady=PADY)
+        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
+        self.help_button.pack(padx=PADX, pady=(0, PADY))
+
         # Serial connection frame
         self.serial_connection_frame = ttk.LabelFrame(self.left_frame, text="CNC serial connection", **FRAME_KWARGS)
         self.serial_connection_frame.grid(row=0, column=0, padx=PADX, pady=PADY, sticky="ew")
-
 
         self.serial_port_label = ttk.Label(self.serial_connection_frame, text="Port COM:")
         self.serial_port_label.grid(row=0, column=0, padx=PADX, pady=PADY)
@@ -189,7 +191,6 @@ class MyGUI:
         # Control frame for movement
         self.control_frame = ttk.LabelFrame(self.left_frame, text="CNC control", **FRAME_KWARGS)
         self.control_frame.grid(row=1, column=0, padx=PADX, pady=PADY, sticky="ew")
-
 
         # Movement buttons
         button = ttk.Button(self.control_frame, text='\u2190', 
@@ -225,7 +226,6 @@ class MyGUI:
         self.step_speed_frame = ttk.LabelFrame(self.left_frame, text="CNC control parameters", **FRAME_KWARGS)
         self.step_speed_frame.grid(row=2, column=0, padx=PADX, pady=PADY, sticky="ew")
 
-
         self.step_label = ttk.Label(self.step_speed_frame, text="Step:")
         self.step_label.grid(row=0, column=0, padx=PADX, pady=PADY)
         self.step_entry = ttk.Entry(self.step_speed_frame)
@@ -241,7 +241,6 @@ class MyGUI:
         # Position setting and test movement frame
         self.position_frame = ttk.LabelFrame(self.left_frame, text="Position configuration", **FRAME_KWARGS)
         self.position_frame.grid(row=3, column=0, padx=PADX, pady=PADY, sticky="ew")
-
 
         # Position buttons arranged as 1 3 / 2 4 with 5 on the right
         self.set_button_1 = ttk.Button(self.position_frame, text="Set 1", command=lambda: self.set_position(1))
@@ -262,7 +261,6 @@ class MyGUI:
             command=lambda: self.set_position(5),
         )
         self.set_button_5.grid(row=0, column=2, rowspan=2, padx=(PADX*3, PADX), pady=PADY)
-
 
         # goto buttons aligned with the set buttons
         self.goto_button_1 = ttk.Button(self.position_frame, text="Go to 1", command=lambda: self.goto_position(1))
@@ -285,8 +283,7 @@ class MyGUI:
         
         # Manual command frame
         self.manual_command_frame = ttk.LabelFrame(self.left_frame, text="Manual command", **FRAME_KWARGS)
-        self.manual_command_frame.grid(row=4, column=0, columnspan=2, padx=PADX, pady=PADY, sticky="ew")
-
+        self.manual_command_frame.grid(row=4, column=0, padx=PADX, pady=PADY, sticky="ew")
 
         self.manual_command_label = ttk.Label(self.manual_command_frame, text="Command:")
         self.manual_command_label.grid(row=0, column=0, padx=PADX, pady=PADY)
@@ -299,7 +296,7 @@ class MyGUI:
 
         # Spectrum plot moved to log position
         self.spectrum_frame = ttk.LabelFrame(self.left_frame, text="Spectrum", **FRAME_KWARGS)
-        self.spectrum_frame.grid(row=5, column=0, padx=(PADX, 0), pady=PADY, sticky="nw")
+        self.spectrum_frame.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="nw")
         spec_container = ttk.Frame(self.spectrum_frame)
         spec_container.pack()
         canvas_holder = ttk.Frame(spec_container)
@@ -338,54 +335,19 @@ class MyGUI:
             command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25),
         ).pack()
 
-        # Marked positions next to spectrum
-        self.marks_frame = ttk.LabelFrame(self.left_frame, text="Marked positions", **FRAME_KWARGS)
-        self.marks_frame.grid(row=5, column=1, padx=(0, PADX), pady=PADY, sticky="nw")
-        self.marked_list = tk.Listbox(self.marks_frame, width=25)
-        self.marked_list.pack(padx=PADX, pady=PADY)
-        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
-        self.help_button.pack(padx=PADX, pady=(0, PADY))
-
         # Log frame aligned next to CNC controls
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
-        self.log_frame.grid(row=0, column=2, rowspan=6, padx=PADX, pady=PADY, sticky="nsew")
-        # keep the on-screen log narrow so the full layout fits within 1080x1920
-        self.log_text = scrolledtext.ScrolledText(
-            self.log_frame, wrap=tk.WORD, height=18, width=20
-        )
+        self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky="nsew")
+
+        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=50)
         self.log_text.pack(fill=tk.BOTH, expand=True)
-        # provide a popup to view the full log history without widening the main window
-        self.log_popup_button = ttk.Button(
-            self.log_frame, text="Open log", command=self.open_log_file
-        )
-        self.log_popup_button.pack(padx=PADX, pady=(0, PADY))
 
         # Spectrometer connection frame
         self.wasatch_connection_frame = ttk.LabelFrame(self.controls_frame, text="Wasatch connection", **FRAME_KWARGS)
         self.wasatch_connection_frame.pack(fill='x', padx=PADX, pady=PADY)
-        # allow selecting a specific USB device (port) for the spectrometer
-        self.usb_devices = []
-        self.usb_device_var = tk.StringVar()
-        self.usb_device_combobox = ttk.Combobox(
-            self.wasatch_connection_frame,
-            textvariable=self.usb_device_var,
-            width=40
-        )
-        self.usb_device_combobox.grid(row=0, column=0, columnspan=2, padx=PADX, pady=PADY, sticky="ew")
-        self.refresh_usb_devices()
 
-        self.wasatch_connect_button = ttk.Button(
-            self.wasatch_connection_frame,
-            text="Connect spectrometer",
-            command=self.connect_spectrometer,
-        )
-        self.wasatch_connect_button.grid(row=1, column=0, padx=PADX, pady=PADY)
-        self.troubleshoot_button = ttk.Button(
-            self.wasatch_connection_frame,
-            text="Troubleshoot/Force connect",
-            command=self.troubleshoot_spectrometer,
-        )
-        self.troubleshoot_button.grid(row=1, column=1, padx=PADX, pady=PADY)
+        self.wasatch_connect_button = ttk.Button(self.wasatch_connection_frame, text="Connect spectrometer", command=self.connect_spectrometer)
+        self.wasatch_connect_button.grid(row=0, column=0, padx=PADX, pady=PADY)
 
         # File path selection for saving spectra
         self.file_path_frame = ttk.LabelFrame(self.controls_frame, text="File path for spectra", **FRAME_KWARGS)
@@ -521,7 +483,6 @@ class MyGUI:
         self.run_area_button.grid(row=6, column=1, padx=PADX, pady=PADY)
         ToolTip(self.run_area_button, "Start scan over defined area", self)
 
-
         self.wasatch_stop_button = ttk.Button(self.wasatch_measure_frame, text="Stop", command=self.stop_measurement)
         self.wasatch_stop_button.grid(row=6, column=2, padx=PADX, pady=PADY)
         
@@ -537,27 +498,6 @@ class MyGUI:
             text="Continue",
             command=self.continue_measurement,
             state=tk.DISABLED
-        )        
-        self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
-        ToolTip(self.continue_button, "Return to saved position and resume scan")
-
-
-        self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
-        self.estimated_time_label = ttk.Label(
-            self.wasatch_measure_frame, textvariable=self.estimated_time_var
-        )
-        self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
-        ToolTip(self.continue_button, "Return to saved position and resume scan", self)
-
-
-        self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
-        self.estimated_time_label = ttk.Label(
-            self.wasatch_measure_frame, textvariable=self.estimated_time_var
-        )
-        self.estimated_time_label.grid(row=8, column=0, columnspan=4, padx=PADX, pady=PADY)
-
-        self.time_calc_progress = ttk.Progressbar(
-            self.wasatch_measure_frame, orient="horizontal", length=300, mode="determinate"
         )
         self.continue_button.grid(row=7, column=2, columnspan=2, padx=PADX, pady=PADY)
         ToolTip(self.continue_button, "Return to saved position and resume scan", self)
@@ -571,7 +511,6 @@ class MyGUI:
         self.time_calc_progress = ttk.Progressbar(
             self.wasatch_measure_frame, orient="horizontal", length=300, mode="determinate"
         )
-
         self.time_calc_progress.grid(row=9, column=0, columnspan=4, padx=PADX, pady=PADY)
 
         # list of widgets disabled during a long scan
@@ -610,11 +549,6 @@ class MyGUI:
             self.map_ax.set_proj_type('ortho')
         except Exception:
             pass
-        self.map_ax.view_init(elev=90, azim=-90)
-        self.map_ax.invert_xaxis()
-        self.map_ax.invert_yaxis()
-        self.map_ax.set_zlabel('')
-        self.map_ax.set_zticks([])
         self.map_canvas = FigureCanvasTkAgg(self.map_fig, master=self.map_frame)
         self.map_canvas.draw()
         self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=False)
@@ -631,10 +565,10 @@ class MyGUI:
         ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 0.8, True)).pack(side="left")
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
 
+
         self.dark_button = ttk.Button(self.right_frame, text="Dark Mode", command=self.toggle_dark_mode)
         self.dark_button.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="ew")
         ToolTip(self.dark_button, "Toggle dark theme", self)
-
 
         self.calculate_predicted_points()
 
@@ -696,6 +630,7 @@ class MyGUI:
                                  background='#4a90e2')
 
         self.root.configure(bg=bg)
+        self.canvas.configure(bg=bg)
         self.style.configure('TFrame', background=bg)
         self.style.configure('TLabelframe', background=frame_bg, foreground=fg)
         self.style.configure('TLabelframe.Label', background=frame_bg, foreground=fg)
@@ -706,17 +641,15 @@ class MyGUI:
         self.style.configure('TCombobox', fieldbackground=entry_bg, foreground=fg)
         self.marked_list.config(bg=entry_bg, fg=fg, selectbackground=ACCENT, selectforeground=bg)
         self.log_text.config(bg=entry_bg, fg=fg, insertbackground=fg)
-        if self.log_popup_text:
-            self.log_popup_text.config(bg=entry_bg, fg=fg, insertbackground=fg)
-        # Apply colors to 3D head-position plot
+        # apply colors to 3D head position plot
         if hasattr(self, 'map_ax'):
             self.map_fig.set_facecolor(bg)
             self.map_ax.set_facecolor(frame_bg)
             for axis in [self.map_ax.xaxis, self.map_ax.yaxis, self.map_ax.zaxis]:
                 axis.label.set_color(fg)
                 axis.set_tick_params(colors=fg)
+            for axis in [self.map_ax.w_xaxis, self.map_ax.w_yaxis, self.map_ax.w_zaxis]:
                 axis.line.set_color(fg)
-
 
     def update_progress(self, progress):
         def _do():
@@ -728,6 +661,7 @@ class MyGUI:
         def _do():
             self.time_calc_progress["value"] = progress
         self.root.after(0, _do)
+
     def zoom_axes(self, ax, canvas, factor, is3d=False):
         if is3d:
             xlim = ax.get_xlim3d()
@@ -964,115 +898,13 @@ class MyGUI:
         )
         self.update_time_calc_progress(100)
 
-    def update_time_estimate(self):
-        self.update_time_calc_progress(0)
-
-        try:
-            count_x = int(self.wasatch_samples_countX_entry.get())
-            count_y = int(self.wasatch_samples_countY_entry.get())
-            count_z = int(self.wasatch_samples_countZ_entry.get())
-        except ValueError:
-            self.estimated_time_var.set("Estimated time: n/a")
-            return
-
-        defined = [p for p in self.user_positions.values() if p]
-        if len(defined) < 2:
-            self.estimated_time_var.set("Estimated time: n/a")
-            return
-
-        if self.wasatch.bounds:
-            start_x, end_x, start_y, end_y, start_z, end_z = (
-                self.wasatch.bounds[0], self.wasatch.bounds[1],
-                self.wasatch.bounds[2], self.wasatch.bounds[3],
-                self.wasatch.bounds[4], self.wasatch.bounds[5],
-            )
-        else:
-            xs = [p['X'] for p in defined]
-            ys = [p['Y'] for p in defined]
-            zs = [p['Z'] for p in defined]
-            if self.user_positions.get('1'):
-                start_x = self.user_positions['1']['X']
-                start_y = self.user_positions['1']['Y']
-                start_z = self.user_positions['1']['Z']
-            else:
-                start_x = min(xs)
-                start_y = min(ys)
-                start_z = min(zs)
-            end_x = max(xs) if start_x == min(xs) else min(xs)
-            end_y = max(ys) if start_y == min(ys) else min(ys)
-            end_z = max(zs) if start_z == min(zs) else min(zs)
-        if start_x == end_x and count_x > 1:
-            self.wasatch_samples_countX_entry.delete(0, tk.END)
-            self.wasatch_samples_countX_entry.insert(0, '1')
-            count_x = 1
-        if start_y == end_y and count_y > 1:
-            self.wasatch_samples_countY_entry.delete(0, tk.END)
-            self.wasatch_samples_countY_entry.insert(0, '1')
-            count_y = 1
-        if start_z == end_z and count_z > 1:
-            self.wasatch_samples_countZ_entry.delete(0, tk.END)
-            self.wasatch_samples_countZ_entry.insert(0, '1')
-            count_z = 1
-
-        step_x = (end_x - start_x) / (count_x - 1) if count_x > 1 else 0
-        step_y = (end_y - start_y) / (count_y - 1) if count_y > 1 else 0
-        step_z = (end_z - start_z) / (count_z - 1) if count_z > 1 else 0
-
-        self.log(
-            f"Estimating time with counts X={count_x}, Y={count_y}, Z={count_z}"
-        )
-        self.log(
-            f"Step sizes for estimate: step_x={step_x}, step_y={step_y}, step_z={step_z}"
-        )
-
-        measure_count = max(count_x * count_y * count_z, 1)
-        move_delay = self.interpolate_time(max(abs(step_x), abs(step_y), abs(step_z)))
-        per_point = self.integration_time * self.scans_to_average + self.delay_ms + move_delay
-        total_ms = measure_count * per_point
-        self.log(
-            "Per point: integration=%dms x%d, delay=%dms, move=%dms -> %dms"
-            % (self.integration_time, self.scans_to_average, self.delay_ms, move_delay, per_point)
-        )
-        # with absolute moves there is no separate row reset delay
-        self.log(f"Estimated total time {total_ms/1000:.2f} s")
-
-        self.estimated_time_var.set(
-            f"Estimated time: {total_ms/1000:.1f} s"
-        )
-        self.update_time_calc_progress(100)
-
-
     def connect_spectrometer(self):
         self.log("Connecting spectrometer...")
-        selection = self.usb_device_combobox.get()
-        target = None
-        for desc, bus, addr, vid, pid in self.usb_devices:
-            if desc == selection:
-                target = dict(bus=bus, address=addr, vid=vid, pid=pid)
-                break
-        device = self.wasatch.connect(target)
+        device = self.wasatch.connect()
         if device:
             self.log("Spectrometer connected")
         else:
             self.log("No spectrometer found")
-
-    def troubleshoot_spectrometer(self):
-        threading.Thread(target=self._troubleshoot_thread, daemon=True).start()
-
-    def _troubleshoot_thread(self):
-        self.log("Starting spectrometer troubleshooting...")
-        selection = self.usb_device_combobox.get()
-        target = None
-        for desc, bus, addr, vid, pid in self.usb_devices:
-            if desc == selection:
-                target = dict(bus=bus, address=addr, vid=vid, pid=pid)
-                break
-        device = self.wasatch.troubleshoot_connection(target)
-
-        if device:
-            self.log("Troubleshooting connected to spectrometer")
-        else:
-            self.log("Troubleshooting failed to connect")
 
     def toggle_connection(self):
         if self.serial.connected:
@@ -1084,37 +916,10 @@ class MyGUI:
             self.connect_button.config(text="Disconnect")
         self.log(log_message)
 
-    def open_log_file(self):
-        path = os.path.join(os.getcwd(), "log.txt")
-        try:
-            with open(path, "w", encoding="utf-8") as f:
-                f.write(self.log_text.get("1.0", tk.END))
-            if sys.platform.startswith("darwin"):
-                subprocess.call(("open", path))
-            elif os.name == "nt":
-                os.startfile(path)
-            else:
-                subprocess.call(("xdg-open", path))
-        except Exception as e:
-            messagebox.showerror("Open log", f"Could not open log file: {e}")
-
-    def refresh_usb_devices(self):
-        """Populate the spectrometer port list using detected USB devices."""
-        devices = self.wasatch.list_usb_devices()
-        self.usb_devices = devices
-        values = [d[0] for d in devices]
-        self.usb_device_combobox['values'] = values
-        if values:
-            self.usb_device_combobox.current(0)
-
-
     def log(self, message):
         def _do():
             self.log_text.insert(tk.END, message + "\n")
             self.log_text.see(tk.END)
-            if self.log_popup_text:
-                self.log_popup_text.insert(tk.END, message + "\n")
-                self.log_popup_text.see(tk.END)
         self.root.after(0, _do)
 
     def prompt_retry(self, msg):
@@ -1137,12 +942,12 @@ class MyGUI:
         elif direction == '\u2193':  # Rear (Y-)
             self.current_position['Y'] -= step
             command = f'G1 Y-{step} F{speed}'
-        elif direction == '\u2190':  # Left (X+)
-            self.current_position['X'] += step
-            command = f'G1 X{step} F{speed}'
-        elif direction == '\u2192':  # Right (X-)
+        elif direction == '\u2190':  # Left (X-)
             self.current_position['X'] -= step
             command = f'G1 X-{step} F{speed}'
+        elif direction == '\u2192':  # Right (X+)
+            self.current_position['X'] += step
+            command = f'G1 X{step} F{speed}'
         elif direction == 'Up':  # Up (Z+)
             self.current_position['Z'] += step
             command = f'G1 Z{step} F{speed}'
@@ -1185,13 +990,10 @@ class MyGUI:
             self.current_position['Z'] = z
             self.position_label.config(text=f"X:{x:.1f} Y:{y:.1f} Z:{z:.1f}")
             self.wasatch.position = (x, y, z)
-            self.wasatch.update_points_plot()
             self.update_volume_display()
+        self.wasatch.update_points_plot()
 
-        if threading.current_thread() is threading.main_thread():
-            _do()
-        else:
-            self.root.after(0, _do)
+        self.root.after(0, _do)
 
     def mark_current_position(self):
         idx = len(self.marked_positions) + 1
@@ -1213,11 +1015,6 @@ class MyGUI:
             self.map_ax.set_proj_type('ortho')
         except Exception:
             pass
-        self.map_ax.view_init(elev=90, azim=-90)
-        self.map_ax.invert_xaxis()
-        self.map_ax.invert_yaxis()
-        self.map_ax.set_zlabel('')
-        self.map_ax.set_zticks([])
 
         xs = []
         ys = []
@@ -1276,27 +1073,28 @@ class MyGUI:
             ys.append(pos['Y'])
             zs.append(pos['Z'])
 
-        if xs and ys and zs and not self.map_zoomed:
+        if xs and ys and zs:
             self.map_ax.set_xlim(min(xs), max(xs))
             self.map_ax.set_ylim(min(ys), max(ys))
             self.map_ax.set_zlim(min(zs), max(zs))
-            self.map_ax.set_zticks([])
         self.map_ax.set_box_aspect([1, 1, 1])
         # hide overlapping ticks when range collapses
         if min(ys) == max(ys):
             self.map_ax.set_yticks([])
         else:
             self.map_ax.set_yticks(None)
-
+        if min(zs) == max(zs):
+            self.map_ax.set_zticks([])
+        else:
+            self.map_ax.set_zticks(None)
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
+        self.map_ax.set_zlabel('Z')
         self.map_canvas.draw()
-
         self.wasatch.update_marked_points(self.marked_positions)
 
 
     def set_position(self, position_number):
-        self.map_zoomed = False
         self.user_positions[str(position_number)] = self.current_position.copy()
         self.log(
             f"Position {position_number} set to X:{self.current_position['X']}, Y:{self.current_position['Y']}, Z:{self.current_position['Z']}."
@@ -1469,7 +1267,6 @@ class MyGUI:
         self.log(
             f"Step sizes: step_x={step_x}, step_y={step_y}, step_z={step_z}"
         )
-
 
         # ensure absolute coordinates and move to starting point
         self.serial.send_gcode('G90')
