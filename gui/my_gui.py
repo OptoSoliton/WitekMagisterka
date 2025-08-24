@@ -170,12 +170,14 @@ class MyGUI:
         self.left_frame.grid_rowconfigure(0, weight=0)
         self.left_frame.grid_rowconfigure(5, weight=1)
 
+
         self.right_frame = ttk.Frame(self.container)
         self.right_frame.grid(row=0, column=1, sticky='nsew')
         self.right_frame.grid_columnconfigure(0, weight=0)
         self.right_frame.grid_columnconfigure(1, weight=1)
         self.right_frame.grid_rowconfigure(0, weight=1)
         self.right_frame.grid_rowconfigure(1, weight=0)
+
 
         # split right side into controls and plots to avoid oversized grid rows
         self.controls_frame = ttk.Frame(self.right_frame)
@@ -357,6 +359,7 @@ class MyGUI:
         self.log_frame.grid_propagate(False)
 
         self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=34)
+
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
         # Spectrometer connection frame
@@ -581,6 +584,7 @@ class MyGUI:
         zoom_frame.pack()
         ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 0.8, True)).pack(side="left")
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
+
 
         self.dark_button = ttk.Button(self.right_frame, text="Dark Mode", command=self.toggle_dark_mode)
         self.dark_button.grid(row=1, column=0, columnspan=2, padx=PADX, pady=PADY, sticky='ew')
