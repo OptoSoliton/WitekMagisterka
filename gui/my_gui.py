@@ -163,11 +163,11 @@ class MyGUI:
 
         # Left and right part of window inside scrollable container
         self.left_frame = ttk.Frame(self.container)
-        self.left_frame.grid(row=0, column=0, sticky='nsew')
-        self.left_frame.grid_columnconfigure(0, weight=1)                 # lewa kolumna (kontrolki)
-        self.left_frame.grid_columnconfigure(1, weight=0, minsize=220)    # węższy log
-        self.left_frame.grid_rowconfigure(0, weight=0)
-        self.left_frame.grid_rowconfigure(5, weight=1)                    # dół rośnie
+        self.left_frame.grid(row=0, column=0, sticky='nw')
+        self.left_frame.columnconfigure(0, weight=1)
+        self.left_frame.columnconfigure(1, weight=0, minsize=260)
+        self.left_frame.columnconfigure(2, weight=0)
+
 
 
         # prawa kolumna: kontrolki na górze, poniżej 2 szerokie panele wykresów
@@ -308,42 +308,37 @@ class MyGUI:
         self.manual_command_button = ttk.Button(self.manual_command_frame, text="Send", command=self.send_manual_command)
         self.manual_command_button.grid(row=0, column=2, padx=PADX, pady=PADY)
 
-        # Dół lewej kolumny: Spectrum + Marked positions obok siebie
-        self.bottom_split = ttk.Frame(self.left_frame)
-        self.bottom_split.grid(row=5, column=0, padx=PADX, pady=PADY, sticky="nsew")
-        self.bottom_split.grid_columnconfigure(0, weight=3)   # szerzej dla wykresu
-        self.bottom_split.grid_columnconfigure(1, weight=1)   # węższa lista
-        self.bottom_split.grid_rowconfigure(0, weight=1)
+        # --- DÓŁ LEWEJ KOLUMNY: Spectrum + Marked positions obok siebie ---
+        self.bottom_row = ttk.Frame(self.left_frame)
+        self.bottom_row.grid(row=5, column=0, sticky='nsew')
+        self.left_frame.rowconfigure(5, weight=1)
+        self.bottom_row.columnconfigure(0, weight=1)
+        self.bottom_row.columnconfigure(1, weight=0, minsize=260)
+        self.bottom_row.rowconfigure(0, weight=1)
 
-        # Spectrum (lewa część)
-        self.spectrum_frame = ttk.LabelFrame(self.bottom_split, text="Spectrum", **FRAME_KWARGS)
-        self.spectrum_frame.grid(row=0, column=0, sticky="nsew", padx=(0, PADX))
-
+        # Spectrum (po lewej)
+        self.spectrum_frame = ttk.LabelFrame(self.bottom_row, text="Spectrum", **FRAME_KWARGS)
+        self.spectrum_frame.grid(row=0, column=0, padx=PADX, pady=PADY, sticky='nsew')
         spec_container = ttk.Frame(self.spectrum_frame)
-        spec_container.pack(fill="both", expand=True)
+        spec_container.pack(fill='both', expand=True)
         canvas_holder = ttk.Frame(spec_container)
-        canvas_holder.pack(side="left", fill="both", expand=True)
+        canvas_holder.pack(side='left', fill='both', expand=True)
+
         self.wasatch.init_spectrum_plot(canvas_holder)
 
         nav_frame = ttk.Frame(spec_container)
-        nav_frame.pack(side="right", padx=(PADX, 0), fill="y")
-        ttk.Button(nav_frame, text="◀", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis="x")).pack()
-        ttk.Button(nav_frame, text="▶", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas,  0.1, axis="x")).pack()
-        ttk.Button(nav_frame, text="▲", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas,  0.1, axis="y")).pack()
-        ttk.Button(nav_frame, text="▼", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis="y")).pack()
+        nav_frame.pack(side='right', padx=(PADX, 0), fill='y')
+        ttk.Button(nav_frame, text="◀", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='x')).pack()
+        ttk.Button(nav_frame, text="▶", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='x')).pack()
+        ttk.Button(nav_frame, text="▲", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='y')).pack()
+        ttk.Button(nav_frame, text="▼", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='y')).pack()
         ttk.Button(nav_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8)).pack()
         ttk.Button(nav_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25)).pack()
 
-        # Marked positions (prawa część, w tym samym rzędzie co Spectrum)
-        self.marks_frame = ttk.LabelFrame(self.bottom_split, text="Marked positions", **FRAME_KWARGS)
-        self.marks_frame.grid(row=0, column=1, sticky="nsew")
-        self.marked_list = tk.Listbox(self.marks_frame)
-        self.marked_list.pack(padx=PADX, pady=PADY, fill='both', expand=True)
-        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
-        self.help_button.pack(padx=PADX, pady=(0, PADY))
+        # Marked positions (po prawej)
+        self.marks_frame = ttk.LabelFrame(self.bottom_row, text="Marked positions", **FRAME_KWARGS)
+        self.marks_frame.grid(row=0, column=1, padx=PADX, pady=PADY, sticky='nsew')
 
-        self.marks_frame = ttk.LabelFrame(self.left_frame, text="Marked positions", **FRAME_KWARGS)
-        self.marks_frame.grid(row=5, column=2, padx=PADX, pady=PADY, sticky='nsew')
         self.marked_list = tk.Listbox(self.marks_frame)
         self.marked_list.pack(padx=PADX, pady=PADY, fill='both', expand=True)
         self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
@@ -351,10 +346,11 @@ class MyGUI:
 
         # Log frame aligned next to CNC controls
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
-        self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky='ns')
+        self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky='n')
+        self.log_frame.configure(width=260)
         self.log_frame.grid_propagate(False)
 
-        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=28)
+        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=26)
 
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
@@ -666,6 +662,8 @@ class MyGUI:
             for axis in [self.map_ax.xaxis, self.map_ax.yaxis, self.map_ax.zaxis]:
                 axis.label.set_color(fg)
                 axis.set_tick_params(colors=fg)
+            for axis in [self.map_ax.xaxis, self.map_ax.yaxis, self.map_ax.zaxis]:
+
                 axis.line.set_color(fg)
 
     def update_progress(self, progress):
