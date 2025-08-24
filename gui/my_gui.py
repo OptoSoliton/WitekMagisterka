@@ -169,7 +169,6 @@ class MyGUI:
         self.left_frame.columnconfigure(2, weight=0)
 
 
-
         # prawa kolumna: kontrolki na górze, poniżej 2 szerokie panele wykresów
         self.right_frame = ttk.Frame(self.container)
         self.right_frame.grid(row=0, column=1, sticky='nsew')
@@ -344,13 +343,12 @@ class MyGUI:
         self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
         self.help_button.pack(padx=PADX, pady=(0, PADY))
 
-        # Log frame aligned next to CNC controls
+        # Log – zwężony i dociągnięty do dołu
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
-        self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky='n')
+        self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky='ns')
         self.log_frame.configure(width=260)
-        self.log_frame.grid_propagate(False)
 
-        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=26)
+        self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=22, width=26)
 
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
