@@ -169,12 +169,14 @@ class MyGUI:
         self.left_frame.grid_rowconfigure(0, weight=0)
         self.left_frame.grid_rowconfigure(5, weight=1)                    # dół rośnie
 
+
         # prawa kolumna: kontrolki na górze, poniżej 2 szerokie panele wykresów
         self.right_frame = ttk.Frame(self.container)
         self.right_frame.grid(row=0, column=1, sticky='nsew')
         self.right_frame.grid_columnconfigure(0, weight=1)
         self.right_frame.grid_rowconfigure(0, weight=0)  # controls
         self.right_frame.grid_rowconfigure(1, weight=1)  # plots
+
 
         self.controls_frame = ttk.Frame(self.right_frame)
         self.controls_frame.grid(row=0, column=0, sticky='ew')
@@ -184,6 +186,7 @@ class MyGUI:
         self.plots_frame.grid_columnconfigure(0, weight=1)
         self.plots_frame.grid_columnconfigure(1, weight=1)
         self.plots_frame.grid_rowconfigure(0, weight=1)
+
 
         # Serial connection frame
         self.serial_connection_frame = ttk.LabelFrame(self.left_frame, text="CNC serial connection", **FRAME_KWARGS)
@@ -315,6 +318,7 @@ class MyGUI:
         # Spectrum (lewa część)
         self.spectrum_frame = ttk.LabelFrame(self.bottom_split, text="Spectrum", **FRAME_KWARGS)
         self.spectrum_frame.grid(row=0, column=0, sticky="nsew", padx=(0, PADX))
+
         spec_container = ttk.Frame(self.spectrum_frame)
         spec_container.pack(fill="both", expand=True)
         canvas_holder = ttk.Frame(spec_container)
@@ -338,12 +342,20 @@ class MyGUI:
         self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
         self.help_button.pack(padx=PADX, pady=(0, PADY))
 
+        self.marks_frame = ttk.LabelFrame(self.left_frame, text="Marked positions", **FRAME_KWARGS)
+        self.marks_frame.grid(row=5, column=2, padx=PADX, pady=PADY, sticky='nsew')
+        self.marked_list = tk.Listbox(self.marks_frame)
+        self.marked_list.pack(padx=PADX, pady=PADY, fill='both', expand=True)
+        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
+        self.help_button.pack(padx=PADX, pady=(0, PADY))
+
         # Log frame aligned next to CNC controls
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
         self.log_frame.grid(row=0, column=1, rowspan=6, padx=PADX, pady=PADY, sticky='ns')
         self.log_frame.grid_propagate(False)
 
         self.log_text = scrolledtext.ScrolledText(self.log_frame, wrap=tk.WORD, height=18, width=28)
+
         self.log_text.pack(fill=tk.BOTH, expand=True)
 
         # Spectrometer connection frame
@@ -542,6 +554,7 @@ class MyGUI:
         self.map_frame = ttk.LabelFrame(self.plots_frame, text="Head position 3D", **FRAME_KWARGS)
         self.map_frame.grid(row=0, column=0, sticky='nsew', padx=(0, PADX))
         self.map_fig = Figure(figsize=(4, 4), dpi=100)
+
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
         try:
             from matplotlib import ticker as _ticker
@@ -563,6 +576,7 @@ class MyGUI:
         # Scan points (prawy wykres)
         self.points_frame = ttk.LabelFrame(self.plots_frame, text="Scan points", **FRAME_KWARGS)
         self.points_frame.grid(row=0, column=1, sticky='nsew')
+
         self.wasatch.init_points_plot(self.points_frame)
         zoom_frame = ttk.Frame(self.points_frame)
         zoom_frame.pack()
@@ -571,6 +585,7 @@ class MyGUI:
 
         self.dark_button = ttk.Button(self.right_frame, text="Dark Mode", command=self.toggle_dark_mode)
         self.dark_button.grid(row=2, column=0, padx=PADX, pady=PADY, sticky='ew')
+
         ToolTip(self.dark_button, "Toggle dark theme", self)
 
         self.calculate_predicted_points()
