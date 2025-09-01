@@ -47,7 +47,7 @@ class Wasatch:
         self.canvas = None
 
         # Figure for measured and predicted points (embedded by GUI)
-        self.points_fig = Figure(figsize=(2.5, 2.5), dpi=100)
+        self.points_fig = Figure(figsize=(2.5, 1.875), dpi=100)
         self.points_ax = self.points_fig.add_subplot(111, projection='3d')
         try:
             self.points_ax.set_proj_type('ortho')
