@@ -26,8 +26,6 @@ TEXT_PRIMARY = '#E6E8EB'
 ACCENT = '#22D3EE'
 PROGRESS_FILL = '#22D3EE'
 PROGRESS_BG = '#2A2F3A'
-TOOLTIP_BG = '#1F2937'
-TOOLTIP_FG = '#E6E8EB'
 GRID_COLOR = '#2A2F3A'
 AXIS_COLOR = '#D1D5DB'
 LINE_COLORS = ['#60A5FA', '#34D399', '#F472B6', '#A78BFA',
@@ -49,35 +47,6 @@ class TkLogHandler(logging.Handler):
             pass
 
 
-class ToolTip:
-    """Simple tooltip that appears on hover."""
-
-    def __init__(self, widget, text: str, gui=None):
-        self.widget = widget
-        self.text = text
-        self.tip = None
-        self.gui = gui
-        widget.bind("<Enter>", self.show)
-        widget.bind("<Leave>", self.hide)
-
-    def show(self, _event=None):
-        if self.tip or not self.text:
-            return
-        x = self.widget.winfo_rootx() + 20
-        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 10
-        self.tip = tw = tk.Toplevel(self.widget)
-        tw.wm_overrideredirect(True)
-        bg = TOOLTIP_BG if self.gui and self.gui.dark_mode else "#ffffe0"
-        fg = TOOLTIP_FG if self.gui and self.gui.dark_mode else "#000000"
-        label = tk.Label(tw, text=self.text, background=bg, foreground=fg,
-                         relief="solid", borderwidth=1)
-        label.pack(ipadx=1)
-        tw.wm_geometry(f"+{x}+{y}")
-
-    def hide(self, _event=None):
-        if self.tip:
-            self.tip.destroy()
-            self.tip = None
 
 class MyGUI:
     def __init__(self, root, serial_connection, wasatch):
@@ -158,6 +127,8 @@ class MyGUI:
         self.paused = False
         self.measure_thread = threading.Thread()
         self.pause_position = None
+
+        self.auto_update_map()
 
     def setup_ui(self):
 
@@ -319,20 +290,22 @@ class MyGUI:
         self.spectrum_frame = ttk.LabelFrame(self.bottom_row, text="Spectrum", **FRAME_KWARGS)
         self.spectrum_frame.grid(row=0, column=0, padx=PADX, pady=PADY, sticky='nsew')
         spec_container = ttk.Frame(self.spectrum_frame)
-        spec_container.pack(fill='both', expand=True)
-        canvas_holder = ttk.Frame(spec_container)
-        canvas_holder.pack(side='left', fill='both', expand=True)
+        spec_container.pack(side='top', fill='both', expand=True)
+        self.wasatch.init_spectrum_plot(spec_container)
 
-        self.wasatch.init_spectrum_plot(canvas_holder)
-
-        nav_frame = ttk.Frame(spec_container)
-        nav_frame.pack(side='right', padx=(PADX, 0), fill='y')
-        ttk.Button(nav_frame, text="◀", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='x')).pack()
-        ttk.Button(nav_frame, text="▶", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='x')).pack()
-        ttk.Button(nav_frame, text="▲", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='y')).pack()
-        ttk.Button(nav_frame, text="▼", command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='y')).pack()
-        ttk.Button(nav_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8)).pack()
-        ttk.Button(nav_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25)).pack()
+        nav_frame = ttk.Frame(self.spectrum_frame)
+        nav_frame.pack(side='bottom', fill='x')
+        buttons = [
+            ("◀", lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='x')),
+            ("▶", lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='x')),
+            ("▲", lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='y')),
+            ("▼", lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='y')),
+            ("🔍+", lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8)),
+            ("🔍-", lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25)),
+        ]
+        for i, (text, cmd) in enumerate(buttons):
+            ttk.Button(nav_frame, text=text, command=cmd).grid(row=0, column=i, padx=PADX, pady=(PADY, 0))
+            nav_frame.grid_columnconfigure(i, weight=1)
 
         # Marked positions (po prawej)
         self.marks_frame = ttk.LabelFrame(self.bottom_row, text="Marked positions", **FRAME_KWARGS)
@@ -340,8 +313,8 @@ class MyGUI:
 
         self.marked_list = tk.Listbox(self.marks_frame)
         self.marked_list.pack(padx=PADX, pady=PADY, fill='both', expand=True)
-        self.help_button = ttk.Button(self.marks_frame, text="Help", command=self.show_help)
-        self.help_button.pack(padx=PADX, pady=(0, PADY))
+        self.delete_mark_button = ttk.Button(self.marks_frame, text="Delete marked point", command=self.delete_marked_point)
+        self.delete_mark_button.pack(padx=PADX, pady=(0, PADY))
 
         # Log – zwężony i dociągnięty do dołu
         self.log_frame = ttk.LabelFrame(self.left_frame, text="Log", **FRAME_KWARGS)
@@ -384,9 +357,11 @@ class MyGUI:
         self.integration_time_entry.grid(row=0, column=1, padx=PADX, pady=(PADY, 0), sticky="ew")
         self.integration_time_entry.insert(tk.END, str(self.integration_time))
         self.set_integration_time_button = ttk.Button(
-            self.wasatch_parameters_frame, text="Set", command=self.set_integration_time
+            self.wasatch_parameters_frame,
+            text="Set",
+            command=self.set_integration_time,
+            width=4,
         )
-
         self.set_integration_time_button.grid(row=0, column=2, padx=PADX, pady=(PADY, 0))
 
         self.scans_to_average_label = ttk.Label(self.wasatch_parameters_frame, text="Scans to Average:")
@@ -395,7 +370,10 @@ class MyGUI:
         self.scans_to_average_entry.grid(row=0, column=4, padx=PADX, pady=(PADY, 0), sticky="ew")
         self.scans_to_average_entry.insert(tk.END, str(self.scans_to_average))
         self.set_scans_to_average_button = ttk.Button(
-            self.wasatch_parameters_frame, text="Set", command=self.set_scans_to_average
+            self.wasatch_parameters_frame,
+            text="Set",
+            command=self.set_scans_to_average,
+            width=4,
         )
         self.set_scans_to_average_button.grid(row=0, column=5, padx=PADX, pady=(PADY, 0))
 
@@ -406,7 +384,10 @@ class MyGUI:
         self.boxcar_half_width_entry.grid(row=1, column=1, padx=PADX, pady=(PADY, PADY), sticky="ew")
         self.boxcar_half_width_entry.insert(tk.END, str(self.boxcar_half_width))
         self.set_boxcar_half_width_button = ttk.Button(
-            self.wasatch_parameters_frame, text="Set", command=self.set_boxcar_half_width
+            self.wasatch_parameters_frame,
+            text="Set",
+            command=self.set_boxcar_half_width,
+            width=4,
         )
         self.set_boxcar_half_width_button.grid(row=1, column=2, padx=PADX, pady=(PADY, PADY))
 
@@ -416,7 +397,10 @@ class MyGUI:
         self.delay_ms_entry.grid(row=1, column=4, padx=PADX, pady=(PADY, PADY), sticky="ew")
         self.delay_ms_entry.insert(tk.END, str(self.delay_ms))
         self.set_delay_ms_button = ttk.Button(
-            self.wasatch_parameters_frame, text="Set", command=self.set_delay_ms
+            self.wasatch_parameters_frame,
+            text="Set",
+            command=self.set_delay_ms,
+            width=4,
         )
         self.set_delay_ms_button.grid(row=1, column=5, padx=PADX, pady=(PADY, PADY))
 
@@ -427,13 +411,21 @@ class MyGUI:
         self.max_spectra_entry.grid(row=1, column=7, padx=PADX, pady=(PADY, PADY), sticky="ew")
         self.max_spectra_entry.insert(tk.END, str(self.max_spectra))
         self.set_max_spectra_button = ttk.Button(
-            self.wasatch_parameters_frame, text="Set", command=self.set_max_spectra
+            self.wasatch_parameters_frame,
+            text="Set",
+            command=self.set_max_spectra,
+            width=4,
         )
         self.set_max_spectra_button.grid(row=1, column=8, padx=PADX, pady=(PADY, PADY))
 
         for c in range(9):
-
-            self.wasatch_parameters_frame.grid_columnconfigure(c, weight=1)
+            if c in (0, 3, 6):
+                minsize = 120
+            elif c in (2, 5, 8):
+                minsize = 50
+            else:
+                minsize = 0
+            self.wasatch_parameters_frame.grid_columnconfigure(c, weight=1, minsize=minsize)
 
         # Measuring frame
         self.wasatch_measure_frame = ttk.LabelFrame(self.controls_frame, text="Measuring", **FRAME_KWARGS)
@@ -473,7 +465,6 @@ class MyGUI:
             state=tk.DISABLED,
         )
         self.wasatch_dark_button.grid(row=1, column=0, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
-        ToolTip(self.wasatch_dark_button, "Record dark reference at current position", self)
 
         self.wasatch_light_button = ttk.Button(
             self.wasatch_measure_frame,
@@ -482,14 +473,19 @@ class MyGUI:
             state=tk.DISABLED,
         )
         self.wasatch_light_button.grid(row=1, column=3, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
-        ToolTip(self.wasatch_light_button, "Record light reference at current position", self)
 
-        # Progress bar and percentage on same row
-        self.progress_bar = ttk.Progressbar(self.wasatch_measure_frame, orient="horizontal", length=300, mode="determinate")
-        self.progress_bar.grid(row=2, column=0, columnspan=5, padx=PADX, pady=(PADY, 0), sticky="ew")
-
-        self.progress_label = ttk.Label(self.wasatch_measure_frame, text="0 %", anchor="center")
-        self.progress_label.grid(row=2, column=5, padx=PADX, pady=(PADY, 0), sticky="e")
+        # Progress bar with percentage overlay
+        self.progress_var = tk.DoubleVar(value=0)
+        self.progress_bar = ttk.Progressbar(
+            self.wasatch_measure_frame,
+            orient="horizontal",
+            mode="determinate",
+            variable=self.progress_var,
+            maximum=100,
+        )
+        self.progress_bar.grid(row=2, column=0, columnspan=6, padx=PADX, pady=(PADY, 0), sticky="ew")
+        self.progress_label = ttk.Label(self.progress_bar, text="0 %", anchor="center")
+        self.progress_label.place(relx=0.5, rely=0.5, anchor="center")
 
         # label and description on one row
         self.run_once_label = ttk.Label(self.wasatch_measure_frame, text="Label:")
@@ -501,11 +497,9 @@ class MyGUI:
         # measurement control buttons
         self.run_once_button = ttk.Button(self.wasatch_measure_frame, text="Run once", command=self.start_measurement_once)
         self.run_once_button.grid(row=4, column=0, columnspan=2, padx=PADX, pady=(PADY, 0), sticky="ew")
-        ToolTip(self.run_once_button, "Acquire a single measurement at current position", self)
 
         self.run_area_button = ttk.Button(self.wasatch_measure_frame, text="Run area", command=self.start_measurement)
         self.run_area_button.grid(row=4, column=2, columnspan=2, padx=PADX, pady=(PADY, 0), sticky="ew")
-        ToolTip(self.run_area_button, "Start scan over defined area", self)
 
         self.wasatch_stop_button = ttk.Button(self.wasatch_measure_frame, text="Stop", command=self.stop_measurement)
         self.wasatch_stop_button.grid(row=4, column=4, columnspan=2, padx=PADX, pady=(PADY, 0), sticky="ew")
@@ -516,7 +510,6 @@ class MyGUI:
             command=self.pause_for_reference
         )
         self.pause_button.grid(row=5, column=0, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
-        ToolTip(self.pause_button, "Pause scan to take dark and optional light references", self)
         self.continue_button = ttk.Button(
             self.wasatch_measure_frame,
             text="Continue",
@@ -524,12 +517,10 @@ class MyGUI:
             state=tk.DISABLED
         )
         self.continue_button.grid(row=5, column=3, columnspan=2, padx=PADX, pady=(PADY, 0), sticky="ew")
-        ToolTip(self.continue_button, "Return to saved position and resume scan", self)
 
         # Dark mode toggle inside measuring frame
         self.dark_button = ttk.Button(self.wasatch_measure_frame, text="Dark Mode", command=self.toggle_dark_mode)
         self.dark_button.grid(row=5, column=5, padx=PADX, pady=(PADY, 0), sticky="ew")
-        ToolTip(self.dark_button, "Toggle dark theme", self)
 
         self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
         self.estimated_time_label = ttk.Label(
@@ -566,7 +557,7 @@ class MyGUI:
         # 3D head position (lewy wykres)
         self.map_frame = ttk.LabelFrame(self.plots_frame, text="Head position 3D", **FRAME_KWARGS)
         self.map_frame.grid(row=0, column=0, sticky='nsew', padx=(0, PADX))
-        self.map_fig = Figure(figsize=(4, 4), dpi=100)
+        self.map_fig = Figure(figsize=(4, 3), dpi=100)
 
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
         try:
@@ -617,22 +608,6 @@ class MyGUI:
         self.wasatch_dark_button.config(state=tk.DISABLED)
         self.wasatch_light_button.config(state=tk.DISABLED)
 
-    def show_help(self):
-        from tkinter import messagebox
-        msg = (
-            "Troubleshooting:\n"
-            "- Define positions with the SET buttons before running.\n"
-            "- Scroll the window if some widgets are hidden.\n"
-            "- Files are automatically numbered when existing.\n"
-            "- Ensure matplotlib is installed for plotting.\n\n"
-            "Workflow:\n"
-            "- Use 'Run area' to scan the volume defined by your points.\n"
-            "- During a scan, press 'Pause for reference' to take dark and light references.\n"
-            "  Move the head, click 'Dark' and optionally 'Light', then 'Continue' to resume.\n"
-            "- Hover over buttons for additional tips."
-        )
-        messagebox.showinfo("Help", msg)
-
     def toggle_dark_mode(self):
         self.dark_mode = not self.dark_mode
         self.apply_theme()
@@ -680,7 +655,7 @@ class MyGUI:
 
     def update_progress(self, progress):
         def _do():
-            self.progress_bar["value"] = progress
+            self.progress_var.set(progress)
             self.progress_label['text'] = f"{progress} %"
         self.root.after(0, _do)
 
@@ -1022,6 +997,14 @@ class MyGUI:
 
         self.root.after(0, _do)
 
+    def auto_update_map(self):
+        self.update_map_position(
+            self.current_position['X'],
+            self.current_position['Y'],
+            self.current_position['Z']
+        )
+        self.root.after(200, self.auto_update_map)
+
     def mark_current_position(self):
         idx = len(self.marked_positions) + 1
         pos = {
@@ -1032,6 +1015,18 @@ class MyGUI:
         }
         self.marked_positions.append(pos)
         self.marked_list.insert(tk.END, f"{idx}: X{pos['X']:.2f} Y{pos['Y']:.2f} Z{pos['Z']:.2f}")
+        self.update_volume_display()
+
+    def delete_marked_point(self):
+        sel = self.marked_list.curselection()
+        if not sel:
+            return
+        index = sel[0]
+        del self.marked_positions[index]
+        self.marked_list.delete(0, tk.END)
+        for i, pos in enumerate(self.marked_positions, start=1):
+            pos['index'] = i
+            self.marked_list.insert(tk.END, f"{i}: X{pos['X']:.2f} Y{pos['Y']:.2f} Z{pos['Z']:.2f}")
         self.update_volume_display()
 
     def update_volume_display(self):
@@ -1101,19 +1096,31 @@ class MyGUI:
             zs.append(pos['Z'])
 
         if xs and ys and zs:
-            self.map_ax.set_xlim(min(xs), max(xs))
-            self.map_ax.set_ylim(min(ys), max(ys))
-            self.map_ax.set_zlim(min(zs), max(zs))
+            xmin, xmax = min(xs), max(xs)
+            ymin, ymax = min(ys), max(ys)
+            zmin, zmax = min(zs), max(zs)
+
+            # Expand collapsed axes to avoid singular transformations
+            if xmin == xmax:
+                xmin -= 0.5
+                xmax += 0.5
+            if ymin == ymax:
+                ymin -= 0.5
+                ymax += 0.5
+            if zmin == zmax:
+                zmin -= 0.5
+                zmax += 0.5
+
+            self.map_ax.set_xlim(xmin, xmax)
+            self.map_ax.set_ylim(ymin, ymax)
+            self.map_ax.set_zlim(zmin, zmax)
+
+            # Hide ticks when the corresponding axis collapses
+            self.map_ax.set_xticks([] if xmin == xmax else None)
+            self.map_ax.set_yticks([] if ymin == ymax else None)
+            self.map_ax.set_zticks([] if zmin == zmax else None)
+
         self.map_ax.set_box_aspect([1, 1, 1])
-        # hide overlapping ticks when range collapses
-        if min(ys) == max(ys):
-            self.map_ax.set_yticks([])
-        else:
-            self.map_ax.set_yticks(None)
-        if min(zs) == max(zs):
-            self.map_ax.set_zticks([])
-        else:
-            self.map_ax.set_zticks(None)
         self.map_ax.set_xlabel('X')
         self.map_ax.set_ylabel('Y')
         self.map_ax.set_zlabel('Z')
