@@ -320,6 +320,7 @@ class MyGUI:
             command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25)
         ).pack(side='left')
 
+
         # Marked positions (po prawej)
         self.marks_frame = ttk.LabelFrame(self.bottom_row, text="Marked positions", **FRAME_KWARGS)
         self.marks_frame.grid(row=0, column=1, padx=PADX, pady=PADY, sticky='nsew')
