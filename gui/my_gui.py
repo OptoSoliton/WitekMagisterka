@@ -295,30 +295,17 @@ class MyGUI:
 
         nav_frame = ttk.Frame(self.spectrum_frame)
         nav_frame.pack(side='bottom', fill='x')
-        ttk.Button(
-            nav_frame, text="◀",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='x')
-        ).pack(side='left')
-        ttk.Button(
-            nav_frame, text="▶",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='x')
-        ).pack(side='left')
-        ttk.Button(
-            nav_frame, text="▲",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='y')
-        ).pack(side='left')
-        ttk.Button(
-            nav_frame, text="▼",
-            command=lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='y')
-        ).pack(side='left')
-        ttk.Button(
-            nav_frame, text="🔍+",
-            command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8)
-        ).pack(side='left')
-        ttk.Button(
-            nav_frame, text="🔍-",
-            command=lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25)
-        ).pack(side='left')
+        buttons = [
+            ("◀", lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='x')),
+            ("▶", lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='x')),
+            ("▲", lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, 0.1, axis='y')),
+            ("▼", lambda: self.pan_axes(self.wasatch.ax, self.wasatch.canvas, -0.1, axis='y')),
+            ("🔍+", lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 0.8)),
+            ("🔍-", lambda: self.zoom_axes(self.wasatch.ax, self.wasatch.canvas, 1.25)),
+        ]
+        for i, (text, cmd) in enumerate(buttons):
+            ttk.Button(nav_frame, text=text, command=cmd).grid(row=0, column=i, padx=PADX, pady=(PADY, 0))
+            nav_frame.grid_columnconfigure(i, weight=1)
 
 
         # Marked positions (po prawej)
@@ -371,9 +358,11 @@ class MyGUI:
         self.integration_time_entry.grid(row=0, column=1, padx=PADX, pady=(PADY, 0), sticky="ew")
         self.integration_time_entry.insert(tk.END, str(self.integration_time))
         self.set_integration_time_button = ttk.Button(
-            self.wasatch_parameters_frame, text="Set", command=self.set_integration_time
+            self.wasatch_parameters_frame,
+            text="Set",
+            command=self.set_integration_time,
+            width=4,
         )
-
         self.set_integration_time_button.grid(row=0, column=2, padx=PADX, pady=(PADY, 0))
 
         self.scans_to_average_label = ttk.Label(self.wasatch_parameters_frame, text="Scans to Average:")
@@ -382,7 +371,10 @@ class MyGUI:
         self.scans_to_average_entry.grid(row=0, column=4, padx=PADX, pady=(PADY, 0), sticky="ew")
         self.scans_to_average_entry.insert(tk.END, str(self.scans_to_average))
         self.set_scans_to_average_button = ttk.Button(
-            self.wasatch_parameters_frame, text="Set", command=self.set_scans_to_average
+            self.wasatch_parameters_frame,
+            text="Set",
+            command=self.set_scans_to_average,
+            width=4,
         )
         self.set_scans_to_average_button.grid(row=0, column=5, padx=PADX, pady=(PADY, 0))
 
@@ -393,7 +385,10 @@ class MyGUI:
         self.boxcar_half_width_entry.grid(row=1, column=1, padx=PADX, pady=(PADY, PADY), sticky="ew")
         self.boxcar_half_width_entry.insert(tk.END, str(self.boxcar_half_width))
         self.set_boxcar_half_width_button = ttk.Button(
-            self.wasatch_parameters_frame, text="Set", command=self.set_boxcar_half_width
+            self.wasatch_parameters_frame,
+            text="Set",
+            command=self.set_boxcar_half_width,
+            width=4,
         )
         self.set_boxcar_half_width_button.grid(row=1, column=2, padx=PADX, pady=(PADY, PADY))
 
@@ -403,7 +398,10 @@ class MyGUI:
         self.delay_ms_entry.grid(row=1, column=4, padx=PADX, pady=(PADY, PADY), sticky="ew")
         self.delay_ms_entry.insert(tk.END, str(self.delay_ms))
         self.set_delay_ms_button = ttk.Button(
-            self.wasatch_parameters_frame, text="Set", command=self.set_delay_ms
+            self.wasatch_parameters_frame,
+            text="Set",
+            command=self.set_delay_ms,
+            width=4,
         )
         self.set_delay_ms_button.grid(row=1, column=5, padx=PADX, pady=(PADY, PADY))
 
@@ -414,12 +412,21 @@ class MyGUI:
         self.max_spectra_entry.grid(row=1, column=7, padx=PADX, pady=(PADY, PADY), sticky="ew")
         self.max_spectra_entry.insert(tk.END, str(self.max_spectra))
         self.set_max_spectra_button = ttk.Button(
-            self.wasatch_parameters_frame, text="Set", command=self.set_max_spectra
+            self.wasatch_parameters_frame,
+            text="Set",
+            command=self.set_max_spectra,
+            width=4,
         )
         self.set_max_spectra_button.grid(row=1, column=8, padx=PADX, pady=(PADY, PADY))
 
         for c in range(9):
-            minsize = 120 if c in (0, 3, 6) else 0
+            if c in (0, 3, 6):
+                minsize = 120
+            elif c in (2, 5, 8):
+                minsize = 50
+            else:
+                minsize = 0
+
             self.wasatch_parameters_frame.grid_columnconfigure(c, weight=1, minsize=minsize)
 
         # Measuring frame
@@ -469,12 +476,18 @@ class MyGUI:
         )
         self.wasatch_light_button.grid(row=1, column=3, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
 
-        # Progress bar and percentage on same row
-        self.progress_bar = ttk.Progressbar(self.wasatch_measure_frame, orient="horizontal", length=300, mode="determinate")
-        self.progress_bar.grid(row=2, column=0, columnspan=5, padx=PADX, pady=(PADY, 0), sticky="ew")
-
-        self.progress_label = ttk.Label(self.wasatch_measure_frame, text="0 %", anchor="center")
-        self.progress_label.grid(row=2, column=5, padx=PADX, pady=(PADY, 0), sticky="e")
+        # Progress bar with percentage overlay
+        self.progress_var = tk.DoubleVar(value=0)
+        self.progress_bar = ttk.Progressbar(
+            self.wasatch_measure_frame,
+            orient="horizontal",
+            mode="determinate",
+            variable=self.progress_var,
+            maximum=100,
+        )
+        self.progress_bar.grid(row=2, column=0, columnspan=6, padx=PADX, pady=(PADY, 0), sticky="ew")
+        self.progress_label = ttk.Label(self.progress_bar, text="0 %", anchor="center")
+        self.progress_label.place(relx=0.5, rely=0.5, anchor="center")
 
         # label and description on one row
         self.run_once_label = ttk.Label(self.wasatch_measure_frame, text="Label:")
@@ -644,7 +657,7 @@ class MyGUI:
 
     def update_progress(self, progress):
         def _do():
-            self.progress_bar["value"] = progress
+            self.progress_var.set(progress)
             self.progress_label['text'] = f"{progress} %"
         self.root.after(0, _do)
 
@@ -992,7 +1005,8 @@ class MyGUI:
             self.current_position['Y'],
             self.current_position['Z']
         )
-        self.root.after(100, self.auto_update_map)
+        self.root.after(200, self.auto_update_map)
+
 
     def mark_current_position(self):
         idx = len(self.marked_positions) + 1
