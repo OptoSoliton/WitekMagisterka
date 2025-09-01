@@ -1,6 +1,7 @@
 import serial
 import serial.tools.list_ports
 import time
+import re
 
 class CNCSerial:
     def __init__(self):
@@ -37,6 +38,19 @@ class CNCSerial:
             if "Idle" in response:
                 return True
         return False
+
+    def query_position(self):
+        if self.serial_port and self.connected:
+            try:
+                self.serial_port.write(b'?')
+                time.sleep(0.05)
+                response = self.serial_port.read_until().decode()
+                match = re.search(r"MPos:([-\d\.]+),([-\d\.]+),([-\d\.]+)", response)
+                if match:
+                    return tuple(float(match.group(i)) for i in range(1, 4))
+            except Exception:
+                pass
+        return None
 
     def list_serial_ports(self):
         return [port.device for port in serial.tools.list_ports.comports()]
