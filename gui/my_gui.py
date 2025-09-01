@@ -307,6 +307,7 @@ class MyGUI:
             ttk.Button(nav_frame, text=text, command=cmd).grid(row=0, column=i, padx=PADX, pady=(PADY, 0))
             nav_frame.grid_columnconfigure(i, weight=1)
 
+
         # Marked positions (po prawej)
         self.marks_frame = ttk.LabelFrame(self.bottom_row, text="Marked positions", **FRAME_KWARGS)
         self.marks_frame.grid(row=0, column=1, padx=PADX, pady=PADY, sticky='nsew')
@@ -425,6 +426,7 @@ class MyGUI:
                 minsize = 50
             else:
                 minsize = 0
+
             self.wasatch_parameters_frame.grid_columnconfigure(c, weight=1, minsize=minsize)
 
         # Measuring frame
@@ -1004,6 +1006,7 @@ class MyGUI:
             self.current_position['Z']
         )
         self.root.after(200, self.auto_update_map)
+
 
     def mark_current_position(self):
         idx = len(self.marked_positions) + 1
