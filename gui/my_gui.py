@@ -503,6 +503,7 @@ class MyGUI:
             text="0%",
             anchor="center",
             font=("TkDefaultFont", 8),
+
         )
         self.progress_label.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -766,6 +767,7 @@ class MyGUI:
         if getattr(self, 'points_win', None):
             self.wasatch.points_canvas.get_tk_widget().destroy()
             self.wasatch.reset_points_fig_size()
+
             self.wasatch.init_points_plot(self.points_frame)
             self.points_frame.grid()
             self.points_visible_var.set(1)
