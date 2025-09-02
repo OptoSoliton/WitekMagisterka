@@ -59,3 +59,4 @@ class CNCSerial:
             except Exception:
                 pass
         return None
+
