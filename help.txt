@@ -1,0 +1,219 @@
+ ) Szybki start (TL;DR)
+
+Połącz CNC (COM/tty → Connect).
+
+Połącz spektrometr (Connect spectrometer). Statusy zobaczysz w logu. 
+
+Wskaż plik CSV (File path → Browse). Jeśli pominiesz, program sam utworzy NIRv2_Witek/scan*.csv w katalogu roboczym. 
+
+Zdefiniuj naroża: Set 1 (początek), Set 2 (X), Set 4 (Y), opcjonalnie Set 5 (Z-góra). Test przed startem. (Pozycje 1–4–5 i test opisane w kodzie i pracy mgr).
+
+Ustaw parametry spektrometru: Integration Time, Scans to Average, Boxcar Half-Width, Delay (ms). Przyciski Set wysyłają ustawienia do urządzenia.
+
+Podaj ilość próbek po X/Y/Z. Przy braku zakresu na osi program wymusi 1.
+
+Sprawdź przewidywane punkty i czas (Estimated time). 
+
+Start: Run-area measurement (siatka) lub Single measurement (pojedynczy). 
+
+W trakcie skanu możesz Pause for reference → Dark/Light → Continue. Dark wymagany do wznowienia. 
+
+Po skanie sprawdź log i CSV; aplikacja porówna liczbę linii z oczekiwaną. 
+
+4) Układ interfejsu i przyciski
+A. Połączenia
+
+CNC Port + Connect/Disconnect — nawiązuje/kończy łączność z GRBL (log pokazuje wynik connect_cnc/disconnect_cnc). 
+
+Connect spectrometer — inicjalizuje połączenie z Wasatch.PY, log: „Connecting… / Spectrometer connected / No spectrometer found”. 
+
+B. File path for spectra
+
+Pole ścieżki + Browse — wybór wyjściowego CSV.
+
+Auto-ścieżka: jeśli puste, ensure_file_path() tworzy folder NIRv2_Witek i unikalne scan.csv, scan_1.csv itd. 
+
+C. Parameters (Wasatch)
+
+Integration Time (ms) — czas integracji, Set wysyła do urządzenia i przelicza czas. 
+
+Scans to Average — uśrednianie, Set → urządzenie + przeliczenie czasu. 
+
+Boxcar Half-Width — filtracja widma (0 = wyłączony). 
+
+Delay (ms) — dodatkowa zwłoka na punkt; Set też aktualizuje estymację. 
+
+D. Definiowanie obszaru
+
+Bieżąca pozycja (X,Y,Z) jest śledzona i wyświetlana; ruch przyciskami kierunkowymi używa bieżącego Step i prędkości F. (Obsługa strzałek w move()). 
+
+Zero — ustawia (0,0,0) poleceniem G92. 
+
+Set 1..5 — zapisuje bieżące XYZ jako punkt użytkownika; Goto 1..5 — bezpieczny przejazd względny do zapisanego punktu (konwersja do ruchu relatywnego + znak X odwrócony w G-code). 
+
+Test — oblot krawędzi prostopadłościanu z 1,2,4,5 (ruchy absolutne z negacją X w G-code; czeka na zakończenie ruchu). 
+
+E. Measuring
+
+Run-area measurement — pełny skan siatki; sprawdza, czy masz ≥2 pozycje i czy CNC jest połączone; liczy punkty i czas; uruchamia wątkiem pętlę measure_and_move. 
+
+Single measurement — pojedynczy odczyt (z obsługą Retry/Cancel przy błędzie). 
+
+Stop — natychmiast zatrzymuje; czyści postęp/punkty, przywraca G91 jeśli CNC połączone. 
+
+Pause for reference — odblokowuje Dark/Light, zapamiętuje pozycję pauzy, wznawia Continue dopiero po Dark. 
+
+Estimated time + pasek „Time calc progress” — pokazują czas i postęp kalkulacji punktów. 
+
+F. Wykresy i widoki
+
+Head 3D (lewy): pozycja głowicy, możliwość Mark position; automatyczne dopasowanie osi, ukrywanie podziałki gdy oś „kolapsuje”. 
+
+Scan points (prawy): punkty przewidywane i zebrane; zoom 🔍+ / 🔍−; Open — osobne okno. 
+
+5) Opis parametrów (co dokładnie zmieniają)
+
+Integration Time (ms) — czas ekspozycji jednego skanu. Większa wartość = więcej sygnału, proporcjonalnie dłużej na punkt. Czas per punkt liczymy: IntegrationTime × ScansToAverage + Delay + MoveDelay. (Estymata w kodzie). 
+
+Scans to Average — liczba skanów uśrednianych na punkt. Poprawia SNR kosztem czasu (liniowo). Przeliczenie czasu po zmianie — w GUI wykonywane automatycznie. 
+
+Boxcar Half-Width — filtr wygładzający; 0 = brak. Nie zmienia czasu ruchu. 
+
+Delay (ms) — dodawany do każdego punktu po dojeździe; ustawiasz w polu Delay; wpływa na estymację. 
+
+MoveDelay (auto) — zależy od kroku między punktami, liczony z interpolacji tablicy kalibracyjnej (sekcja 8). 
+
+Zmiany w Integration Time / Scans to Average / Delay natychmiast aktualizują estymatę. 
+
+6) Siatka próbkowania i granice
+
+Obszar wyznaczają punkty użytkownika (min/max po osiach). Minimalnie wymagane są 2 punkty. 
+
+Rekomendacja: ustaw 1 (start), 2 (X-max), 4 (Y-max), 5 (Z-max), a potem Test. 
+
+Liczba próbek X/Y/Z — w polach Count X/Y/Z. Gdy zakres osi = 0, aplikacja wymusza 1 próbkę (także w estymacie).
+
+Podgląd przewidywanych punktów liczy calculate_predicted_points() i rysuje wykres. 
+
+7) Tryby pomiaru i przebieg
+
+Run-area measurement
+
+Warunki startu: ≥2 pozycje, CNC połączone, ustawiona ścieżka. Potem wywołuje measure_and_move (wątek). 
+
+Przejazdy realizowane są z przełączaniem G90/G91; X w G-code ma odwrócony znak względem mapy (celowe). 
+
+Wewnątrz pętli: automatyczne retry ruchu/pomiaru z limitem prób; postęp i log na bieżąco. 
+
+Po zakończeniu: weryfikacja CSV: oczekiwane = X×Y×Z, porównanie z liczbą linii (minus nagłówek) i ostrzeżenie, gdy różne. 
+
+Single measurement
+
+Jedno wywołanie akwizycji; przy błędzie okno Retry/Cancel; po wszystkim zamyka plik i odblokowuje GUI. 
+
+Pause for reference → Dark/Light → Continue
+
+Pause for reference ustawia paused=True, odblokowuje przyciski Dark/Light. Po Dark (wymagany) można Continue, które wraca do zapisanego XYZ i wznawia skan. 
+
+Dark/Light mają automatyczne retry (do 3), potem pytanie Retry?. 
+
+Stop
+
+stop_measurement() czyści stan, wyłącza pauzę, resetuje postęp, czyści punkty podglądu; przy aktywnym CNC przywraca G91. 
+
+8) Estymacja czasu i opóźnienie ruchu
+
+Całkowity czas: (countX×countY×countZ) × (IntegrationTime × ScansToAverage + Delay + MoveDelay). Wyliczany i pokazywany w GUI. 
+
+MoveDelay: oparty na największym kroku ze {ΔX,ΔY,ΔZ} między punktami i interpolowany z kalibracji (ms):
+kroki: 1,5,10,20,30,40,50,60,70,80,100,120,150 → czasy: 500,1150,1560,2000,2700,3300,3800,4400,4900,5500,6600,7800,9700. 
+
+Zmiany w Integration Time / Scans to Average / Delay natychmiast aktualizują estymatę. 
+
+9) Plik wyjściowy CSV
+
+Wybór ścieżki: Browse.
+
+Auto-ścieżka, jeśli puste: tworzy folder NIRv2_Witek i kolejne nazwy scan.csv, scan_1.csv… (bez nadpisywania). 
+
+Po skanie: weryfikacja zgodności liczby linii z oczekiwaną liczbą punktów; komunikat ostrzegawczy, jeśli się nie zgadza. 
+
+10) Widoki 3D i punkty
+
+Head 3D: bieżąca pozycja, „Mark position” dodaje znaczniki (czerwone „x”, podpisy indeksów). Osiom auto-rozszerzanie zakresu i ukrywanie podziałki przy kolapsie. 
+
+Scan points: przewidywane i zebrane punkty; zoom (🔍+ / 🔍−), „Open” przenosi do osobnego okna. 
+
+11) Koordynaty, strony ruchu, G90/G91
+
+Kierunki:
+Y↑ – przód (+Y), Y↓ – tył (−Y), X→ – prawo (+X), X← – lewo (−X), Z↑/Z↓ – góra/dół.
+
+Uwaga – X: w komendach GRBL znak X jest negowany względem mapy (zamierzone). W move(), goto_position(), test_positions() widać to jako X{-…} podczas wysyłania G-code.
+
+Zero: G92 X0 Y0 Z0.
+
+Przełączanie G90/G91 zależnie od wykonywanej operacji (np. dojazdy absolutne, potem powrót do relatywnego). 
+
+12) Referencje „Dark/Light” (w praktyce)
+
+Po Pause for reference wykonaj Dark (wymagany) i ewentualnie Light w tym samym punkcie.
+
+Continue wraca do zapamiętanej pozycji i wznawia siatkę; bez Dark pojawi się komunikat blokujący wznowienie. 
+
+Dark/Light mają do 3 auto-prób i potem okno Retry/Cancel (stabilizacja USB, wiązki, itp.). 
+
+13) Komunikaty i jak wyjść z „pułapek”
+
+Set at least two positions first — ustaw przynajmniej 2 punkty (np. 1 i 2/4). 
+
+CNC not connected — połącz CNC (Run-area bez połączenia nie wystartuje). 
+
+Estimated time: n/a — dodaj punkty oraz Count X/Y/Z; albo brak bounds. 
+
+Paused. Take dark reference… — jesteś w pauzie; wykonaj Dark i (opcjonalnie) Light, następnie Continue. 
+
+Take dark reference before continuing — wymóg Dark przed wznowieniem. 
+
+Dark/Light measurement failed… Retry? — po 3 auto-próbach pytanie o retry; sprawdź kabel, spektrometr, tło światła. 
+
+Warning: expected N points, but file has M — niekompletne CSV (przerwanie zapisu/pracy). Podejmij decyzję: powtórz brakujący fragment lub cały skan. 
+
+14) Praca bez podłączeń (tryb testu)
+
+Bez spektrometru: można klikać UI, ale nie zapiszesz widm; pojawią się błędy akwizycji/ostrzeżenia. (Przycisk „Connect spectrometer” wypisuje statusy w logu). 
+
+Bez CNC: Run-area nie wystartuje („CNC not connected”); Single measurement (bez ruchu) może posłużyć do testu spektrometru. 
+
+W trybie „Connections and file path” baner informuje o brakach (CNC/spektrometr/CSV). (Mechanizm banera w wizardzie). 
+
+15) Dobre praktyki
+
+Zawsze ustaw File path przed dłuższym skanem (generator nazw i tak chroni przed nadpisaniem). 
+
+Test objętości skanu przed Start (wykrywanie kolizji i limitów). 
+
+Zacznij od krótkiej siatki (np. 5×5×1), potem iteruj Integration/Scans.
+
+Jeśli piki są zbyt szerokie — zmniejsz Boxcar; jeśli szumi — zwiększ Scans to Average lub Integration Time.
+
+16) Formuły i szacunki (jak liczy program)
+
+Kroki siatki: step_x = (X_end – X_start) / (CountX – 1) (gdy CountX>1; inaczej 0); analogicznie Y/Z. (Liczone przy estymacie). 
+
+Per-point time: IntegrationTime × ScansToAverage + Delay + MoveDelay. (Wprost logowane w estymacie per-point). 
+
+MoveDelay(step) — interpolacja po tablicy (ms) dla kroków: 1,5,10,20,30,40,50,60,70,80,100,120,150 → 500…9700 ms. 
+
+Całkowity czas ≈ liczba punktów × per-point time (pokazywany jako „Estimated time: … s”). 
+
+17) Najczęstsze pytania
+
+Dlaczego Z-samples ustawiają się na 1? — bo brak zakresu Z (start=end) → wymuszenie 1 próbki na tej osi. Dzieje się to zarówno przy kalkulacji punktów, jak i w estymacie.
+
+Czemu nie mogę „Continue”? — nie wykonano Dark po pauzie; to warunek wznowienia. 
+
+Czemu punkty na wykresie są „ściśnięte” do jednej linii/ścianki? — jeden z wymiarów ma zerowy zakres (np. x1=x2). Oś jest wtedy zwinięta i podziałka ukryta. 
+
+Czemu X jedzie w „złą” stronę? — oś X w G-code ma odwrócony znak względem mapy (zamierzone dopasowanie). Zobacz move/goto/test gdzie X wysyłane jest jako -X.
+
