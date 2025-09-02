@@ -569,8 +569,8 @@ class MyGUI:
         # toggles for plot visibility
         self.view_frame = ttk.Frame(self.controls_frame)
         self.view_frame.pack(fill='x', padx=PADX, pady=1)
-        self.map_visible_var = tk.IntVar(value=0)
-        self.points_visible_var = tk.IntVar(value=0)
+        self.map_visible_var = tk.IntVar(value=1)
+        self.points_visible_var = tk.IntVar(value=1)
         ttk.Checkbutton(
             self.view_frame,
             text="Head 3D",
@@ -608,8 +608,8 @@ class MyGUI:
 
         # 3D head position (lewy wykres)
         self.map_frame = ttk.LabelFrame(self.plots_frame, text="Head position 3D", **FRAME_KWARGS)
-        self.map_frame.grid(row=0, column=0, sticky='nsew', padx=(0, PADX))
-        self.map_fig = Figure(figsize=(4, 2.7), dpi=100)
+        self.map_frame.grid(row=0, column=0, sticky='nsew', padx=PADX)
+        self.map_fig = Figure(figsize=(2.5, 1.6875), dpi=100)
 
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
         try:
@@ -631,7 +631,7 @@ class MyGUI:
 
         # Scan points (prawy wykres)
         self.points_frame = ttk.LabelFrame(self.plots_frame, text="Scan points", **FRAME_KWARGS)
-        self.points_frame.grid(row=0, column=1, sticky='nsew')
+        self.points_frame.grid(row=0, column=1, sticky='nsew', padx=PADX)
 
         self.wasatch.init_points_plot(self.points_frame)
         zoom_frame = ttk.Frame(self.points_frame)
