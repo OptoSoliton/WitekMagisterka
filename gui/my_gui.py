@@ -202,6 +202,20 @@ class MyGUI:
         self.connect_button = ttk.Button(self.serial_connection_frame, text="Connect", command=self.toggle_connection)
         self.connect_button.grid(row=0, column=2, padx=PADX, pady=PADY)
 
+        self.light_theme_button = ttk.Button(
+            self.serial_connection_frame,
+            text="Light GUI mode",
+            command=lambda: self.set_theme(False),
+        )
+        self.light_theme_button.grid(row=0, column=3, padx=PADX, pady=PADY)
+
+        self.dark_theme_button = ttk.Button(
+            self.serial_connection_frame,
+            text="Dark GUI mode",
+            command=lambda: self.set_theme(True),
+        )
+        self.dark_theme_button.grid(row=0, column=4, padx=PADX, pady=PADY)
+
         # Control frame for movement
         self.control_frame = ttk.LabelFrame(self.left_frame, text="CNC control", **FRAME_KWARGS)
         self.control_frame.grid(row=1, column=0, padx=PADX, pady=PADY, sticky="ew")
@@ -474,41 +488,6 @@ class MyGUI:
         ):
             entry.bind("<KeyRelease>", lambda e: self.calculate_predicted_points())
 
-        # Progress bar and percentage on same row
-        self.progress_bar = ttk.Progressbar(self.wasatch_measure_frame, orient="horizontal", length=300, mode="determinate")
-        self.progress_bar.grid(row=1, column=0, columnspan=5, padx=PADX, pady=(PADY, 0), sticky="ew")
-
-        self.progress_label = ttk.Label(self.wasatch_measure_frame, text="0 %", anchor="center")
-        self.progress_label.grid(row=1, column=5, padx=PADX, pady=(PADY, 0), sticky="e")
-
-        # label and description on one row
-        self.run_once_label = ttk.Label(self.wasatch_measure_frame, text="Label:")
-        self.run_once_label.grid(row=2, column=0, padx=PADX, pady=(PADY, 0), sticky="w")
-
-        self.run_once_description = ttk.Entry(self.wasatch_measure_frame, width=30)
-        self.run_once_description.grid(row=2, column=1, columnspan=5, padx=PADX, pady=(PADY, 0), sticky="ew")
-
-        # dark and light reference buttons after label
-
-        self.wasatch_dark_button = ttk.Button(
-            self.wasatch_measure_frame,
-            text="Dark",
-            command=self.run_dark,
-            state=tk.DISABLED,
-        )
-        self.wasatch_dark_button.grid(row=1, column=0, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
-        ToolTip(self.wasatch_dark_button, "Record dark reference at current position", self)
-
-
-        self.wasatch_light_button = ttk.Button(
-            self.wasatch_measure_frame,
-            text="Light",
-            command=self.run_light,
-            state=tk.DISABLED,
-        )
-        self.wasatch_light_button.grid(row=1, column=3, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
-        ToolTip(self.wasatch_light_button, "Record light reference at current position", self)
-
         # Progress bar with percentage overlay
         self.progress_var = tk.DoubleVar(value=0)
         self.progress_bar = ttk.Progressbar(
@@ -518,7 +497,7 @@ class MyGUI:
             variable=self.progress_var,
             maximum=100,
         )
-        self.progress_bar.grid(row=2, column=0, columnspan=6, padx=PADX, pady=(PADY, 0), sticky="ew")
+        self.progress_bar.grid(row=1, column=0, columnspan=6, padx=PADX, pady=(PADY, 0), sticky="ew")
         self.progress_label = ttk.Label(
             self.progress_bar,
             text="0 %",
@@ -529,11 +508,29 @@ class MyGUI:
 
         # label and description on one row
         self.run_once_label = ttk.Label(self.wasatch_measure_frame, text="Label:")
-        self.run_once_label.grid(row=3, column=0, padx=PADX, pady=(PADY, 0), sticky="w")
+        self.run_once_label.grid(row=2, column=0, padx=PADX, pady=(PADY, 0), sticky="w")
 
         self.run_once_description = ttk.Entry(self.wasatch_measure_frame, width=30)
-        self.run_once_description.grid(row=3, column=1, columnspan=5, padx=PADX, pady=(PADY, 0), sticky="ew")
+        self.run_once_description.grid(row=2, column=1, columnspan=5, padx=PADX, pady=(PADY, 0), sticky="ew")
 
+        # dark and light reference buttons below label
+        self.wasatch_dark_button = ttk.Button(
+            self.wasatch_measure_frame,
+            text="Dark reference",
+            command=self.run_dark,
+            state=tk.DISABLED,
+        )
+        self.wasatch_dark_button.grid(row=3, column=0, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
+        ToolTip(self.wasatch_dark_button, "Record dark reference at current position", self)
+
+        self.wasatch_light_button = ttk.Button(
+            self.wasatch_measure_frame,
+            text="Light reference",
+            command=self.run_light,
+            state=tk.DISABLED,
+        )
+        self.wasatch_light_button.grid(row=3, column=3, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
+        ToolTip(self.wasatch_light_button, "Record light reference at current position", self)
 
         # measurement control buttons
         self.run_once_button = ttk.Button(self.wasatch_measure_frame, text="Run once", command=self.start_measurement_once)
@@ -564,12 +561,6 @@ class MyGUI:
         )
         self.continue_button.grid(row=5, column=3, columnspan=2, padx=PADX, pady=(PADY, 0), sticky="ew")
         ToolTip(self.continue_button, "Return to saved position and resume scan", self)
-
-
-        # Dark mode toggle inside measuring frame
-        self.dark_button = ttk.Button(self.wasatch_measure_frame, text="Dark Mode", command=self.toggle_dark_mode)
-        self.dark_button.grid(row=5, column=5, padx=PADX, pady=(PADY, 0), sticky="ew")
-        ToolTip(self.dark_button, "Toggle dark theme", self)
 
         self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
         self.estimated_time_label = ttk.Label(
@@ -625,7 +616,7 @@ class MyGUI:
         # 3D head position (lewy wykres)
         self.map_frame = ttk.LabelFrame(self.plots_frame, text="Head position 3D", **FRAME_KWARGS)
         self.map_frame.grid(row=0, column=0, sticky='nsew', padx=(0, PADX))
-        self.map_fig = Figure(figsize=(4, 3), dpi=100)
+        self.map_fig = Figure(figsize=(4, 2.7), dpi=100)
 
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
         try:
@@ -643,10 +634,6 @@ class MyGUI:
         self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.position_label = ttk.Label(self.map_frame, text="X:0 Y:0 Z:0")
         self.position_label.pack()
-        theme_frame = ttk.Frame(self.map_frame)
-        theme_frame.pack()
-        ttk.Button(theme_frame, text="Light", command=lambda: self.set_theme(False)).pack(side="left", padx=(0, PADX))
-        ttk.Button(theme_frame, text="Dark", command=lambda: self.set_theme(True)).pack(side="left")
         ttk.Button(self.map_frame, text="Mark position", command=self.mark_current_position).pack(pady=(0, PADY))
 
         # Scan points (prawy wykres)
@@ -686,10 +673,6 @@ class MyGUI:
         self.dark_mode = dark
         self.apply_theme()
         self.wasatch.set_dark_mode(dark)
-        self.dark_button.config(text="Light Mode" if dark else "Dark Mode")
-
-    def toggle_dark_mode(self):
-        self.set_theme(not self.dark_mode)
 
     def apply_theme(self):
         if self.dark_mode:
@@ -771,6 +754,8 @@ class MyGUI:
         if getattr(self, 'points_win', None):
             return
         self.points_visible_var.set(0)
+        if hasattr(self.wasatch, 'points_canvas'):
+            self.wasatch.points_canvas.get_tk_widget().destroy()
         self.points_frame.grid_remove()
         self.points_win = tk.Toplevel(self.root)
         self.points_win.title("Scan points")
@@ -779,8 +764,7 @@ class MyGUI:
 
     def close_points_window(self):
         if getattr(self, 'points_win', None):
-            for child in self.points_win.winfo_children():
-                child.destroy()
+            self.wasatch.points_canvas.get_tk_widget().destroy()
             self.wasatch.init_points_plot(self.points_frame)
             self.points_frame.grid()
             self.points_visible_var.set(1)
