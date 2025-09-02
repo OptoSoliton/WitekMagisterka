@@ -1,3 +1,4 @@
+
 1) Szybki start (TL;DR)
 
 Połącz CNC (COM/tty → Connect).
