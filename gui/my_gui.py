@@ -1,3 +1,6 @@
+from pathlib import Path
+import sys
+
 import tkinter as tk
 from tkinter import ttk, scrolledtext, filedialog, messagebox
 import queue
@@ -5,9 +8,21 @@ import time
 import threading
 import numpy as np
 import logging
-from pathlib import Path
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure  # required for embedded plots
+
+
+def resource_path(rel: str) -> Path:
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return (base / rel).resolve()
+
+
+def load_help_text() -> str:
+    for rel in ("help/help.txt", "help.txt", "gui/help.txt"):
+        p = resource_path(rel)
+        if p.exists():
+            return p.read_text(encoding="utf-8", errors="replace")
+    return "Help file not found. Put help/help.txt next to the .exe."
 
 # Global padding to keep layout compact
 PADX = 3
@@ -636,12 +651,22 @@ class MyGUI:
         self.points_frame = ttk.LabelFrame(self.plots_frame, text="Scan points", **FRAME_KWARGS)
         self.points_frame.grid(row=0, column=1, sticky='nsew', padx=PADX)
 
-        self.wasatch.init_points_plot(self.points_frame)
         zoom_frame = ttk.Frame(self.points_frame)
         zoom_frame.pack()
         ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 0.8, True)).pack(side="left")
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
         ttk.Button(zoom_frame, text="Open", command=self.open_points_window).pack(side="left")
+
+        self.wasatch.init_points_plot(self.points_frame)
+
+        self.show_marked_var = tk.IntVar(value=0)
+        ttk.Checkbutton(
+            self.points_frame,
+            text="Show marked positions",
+            variable=self.show_marked_var,
+            command=self.toggle_marked_points,
+        ).pack(side="bottom")
+
         self.toggle_head_plot()
         self.toggle_points_plot()
         self.calculate_predicted_points()
@@ -710,12 +735,7 @@ class MyGUI:
                 axis.line.set_color(fg)
 
     def open_help(self):
-        help_path = Path(__file__).resolve().parent.parent / "help.txt"
-        try:
-            content = help_path.read_text(encoding="utf-8")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load help file: {e}")
-            return
+        content = load_help_text()
         win = tk.Toplevel(self.root)
         win.title("Help")
         text = scrolledtext.ScrolledText(win, wrap='word', width=100, height=40)
@@ -734,8 +754,15 @@ class MyGUI:
         if self.points_visible_var.get():
             self.points_frame.grid()
             self.wasatch.update_points_plot()
+            self.toggle_marked_points()
         else:
             self.points_frame.grid_remove()
+
+    def toggle_marked_points(self):
+        if self.show_marked_var.get():
+            self.wasatch.update_marked_points(self.marked_positions)
+        else:
+            self.wasatch.update_marked_points([])
 
     def open_map_window(self):
         if getattr(self, 'map_win', None):
@@ -770,13 +797,25 @@ class MyGUI:
         self.points_win = tk.Toplevel(self.root)
         self.points_win.title("Scan points")
         self.points_win.protocol('WM_DELETE_WINDOW', self.close_points_window)
+        zoom_frame = ttk.Frame(self.points_win)
+        zoom_frame.pack()
+        ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 0.8, True)).pack(side="left")
+        ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
         self.wasatch.init_points_plot(self.points_win)
+        ttk.Checkbutton(
+            self.points_win,
+            text="Show marked positions",
+            variable=self.show_marked_var,
+            command=self.toggle_marked_points,
+        ).pack(side="bottom")
+        self.toggle_marked_points()
 
     def close_points_window(self):
         if getattr(self, 'points_win', None):
             self.wasatch.points_canvas.get_tk_widget().destroy()
             self.wasatch.reset_points_fig_size()
             self.wasatch.init_points_plot(self.points_frame)
+            self.toggle_marked_points()
             self.points_frame.grid()
             self.points_visible_var.set(1)
             self.points_win.destroy()
@@ -1277,7 +1316,7 @@ class MyGUI:
         self.map_ax.set_ylabel('Y')
         self.map_ax.set_zlabel('Z')
         self.map_canvas.draw()
-        self.wasatch.update_marked_points(self.marked_positions)
+        self.toggle_marked_points()
 
 
     def set_position(self, position_number):
