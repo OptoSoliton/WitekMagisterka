@@ -3,6 +3,7 @@ import serial.tools.list_ports
 import time
 import re
 
+
 class CNCSerial:
     def __init__(self):
         self.serial_port = None
@@ -63,3 +64,4 @@ class CNCSerial:
     def query_position(self):
         """Backward-compatible wrapper for current position queries."""
         return self.get_current_position()
+
