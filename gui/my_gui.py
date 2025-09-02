@@ -115,7 +115,7 @@ class MyGUI:
 
         self.style = ttk.Style(self.root)
         self.style.theme_use('clam')
-        self.dark_mode = False
+        self.dark_mode = True
 
         # Actual XYZ position
         self.current_position = {'X': 0, 'Y': 0, 'Z': 0}
@@ -500,9 +500,10 @@ class MyGUI:
         self.progress_bar.grid(row=1, column=0, columnspan=6, padx=PADX, pady=(PADY, 0), sticky="ew")
         self.progress_label = ttk.Label(
             self.progress_bar,
-            text="0 %",
+            text="0%",
             anchor="center",
-            font=("TkDefaultFont", 9),
+            font=("TkDefaultFont", 8),
+
         )
         self.progress_label.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -765,6 +766,8 @@ class MyGUI:
     def close_points_window(self):
         if getattr(self, 'points_win', None):
             self.wasatch.points_canvas.get_tk_widget().destroy()
+            self.wasatch.reset_points_fig_size()
+
             self.wasatch.init_points_plot(self.points_frame)
             self.points_frame.grid()
             self.points_visible_var.set(1)
@@ -781,7 +784,7 @@ class MyGUI:
     def update_progress(self, progress):
         def _do():
             self.progress_var.set(progress)
-            self.progress_label['text'] = f"{progress} %"
+            self.progress_label['text'] = f"{int(progress)}%"
         self.root.after(0, _do)
 
     def update_time_calc_progress(self, progress):
