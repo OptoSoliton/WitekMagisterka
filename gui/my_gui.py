@@ -47,6 +47,34 @@ class TkLogHandler(logging.Handler):
             pass
 
 
+class ToolTip:
+    """Simple tooltip implementation for Tkinter widgets."""
+
+    def __init__(self, widget, text, gui=None):
+        self.widget = widget
+        self.text = text
+        self.gui = gui
+        self.tipwindow = None
+        widget.bind("<Enter>", self.show)
+        widget.bind("<Leave>", self.hide)
+
+    def show(self, _event=None):
+        if self.tipwindow or not self.text:
+            return
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        self.tipwindow = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        label = tk.Label(tw, text=self.text, background="#ffffe0", relief="solid", borderwidth=1)
+        label.pack(ipadx=2)
+
+    def hide(self, _event=None):
+        tw = self.tipwindow
+        self.tipwindow = None
+        if tw:
+            tw.destroy()
+
 
 class MyGUI:
     def __init__(self, root, serial_connection, wasatch):
@@ -467,7 +495,7 @@ class MyGUI:
             command=self.run_dark,
             state=tk.DISABLED,
         )
-        self.wasatch_dark_button.grid(row=3, column=0, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
+        self.wasatch_dark_button.grid(row=1, column=0, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
         ToolTip(self.wasatch_dark_button, "Record dark reference at current position", self)
 
 
@@ -478,6 +506,7 @@ class MyGUI:
             state=tk.DISABLED,
         )
         self.wasatch_light_button.grid(row=1, column=3, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
+        ToolTip(self.wasatch_light_button, "Record light reference at current position", self)
 
         # Progress bar with percentage overlay
         self.progress_var = tk.DoubleVar(value=0)

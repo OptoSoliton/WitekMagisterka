@@ -3,6 +3,7 @@ import serial.tools.list_ports
 import time
 import re
 
+
 class CNCSerial:
     def __init__(self):
         self.serial_port = None
@@ -59,4 +60,3 @@ class CNCSerial:
             except Exception:
                 pass
         return None
-
