@@ -18,6 +18,7 @@ class InfoBanner(ttk.Frame):
         self._label.configure(text=text)
 
 
+
 class MeasurementWizard(tk.Toplevel):
     """Step-by-step wizard guiding through measurement setup."""
 
@@ -83,6 +84,7 @@ class MeasurementWizard(tk.Toplevel):
                 msgs.append("No CSV selected – measurements will not be written.")
             self.conn_banner.set("\n".join(msgs) if msgs else "All set.")
 
+
     def _next(self):
         if self.current < len(self.steps) - 1:
             self.current += 1
@@ -126,6 +128,7 @@ class MeasurementWizard(tk.Toplevel):
         ).grid(row=4, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="ew")
         self.conn_banner = InfoBanner(frame, "")
         self.conn_banner.grid(row=5, column=0, columnspan=3, sticky="ew", padx=PADX, pady=(0, PADY))
+
         frame.grid_columnconfigure(1, weight=1)
         return frame
 
@@ -141,6 +144,7 @@ class MeasurementWizard(tk.Toplevel):
         ttk.Label(
             frame,
             text="2) Motion and volume (XYZ)",
+
             font=("TkDefaultFont", 10, "bold"),
         ).grid(row=0, column=0, columnspan=4, pady=(0, PADY))
         ttk.Label(frame, text="Step:").grid(row=1, column=0, padx=PADX, pady=PADY)
@@ -189,6 +193,7 @@ class MeasurementWizard(tk.Toplevel):
         )
         self.z_warn = InfoBanner(frame, "")
         self.z_warn.grid(row=9, column=0, columnspan=4, sticky="ew", padx=PADX, pady=(0, PADY))
+
         return frame
 
     def _apply_motion(self):
@@ -233,6 +238,7 @@ class MeasurementWizard(tk.Toplevel):
             wraplength=560,
             justify="left",
         ).grid(row=4, column=0, columnspan=4, padx=PADX, pady=PADY, sticky="w")
+
         return frame
 
     def _apply_spectrometer(self):
@@ -275,6 +281,7 @@ class MeasurementWizard(tk.Toplevel):
         ttk.Button(frame, text="Run once", command=self._run_once).grid(
             row=5, column=2, padx=PADX, pady=PADY
         )
+
         return frame
 
     def _run_dark(self):
@@ -297,12 +304,14 @@ class MeasurementWizard(tk.Toplevel):
         else:
             self.gui.log("Spectrometer not connected")
 
+
     # ----- Step 5 -----
     def _grid_step(self):
         frame = ttk.Frame(self.container)
         ttk.Label(
             frame,
             text="5) Grid (X×Y×Z)",
+
             font=("TkDefaultFont", 10, "bold"),
         ).grid(row=0, column=0, columnspan=4, pady=(0, PADY))
         ttk.Label(frame, text="Samples X:").grid(row=1, column=0, padx=PADX, pady=PADY)
@@ -325,6 +334,7 @@ class MeasurementWizard(tk.Toplevel):
         return frame
 
     def _apply_grid_3d(self):
+
         self.gui.wasatch_samples_countX_entry.delete(0, tk.END)
         self.gui.wasatch_samples_countX_entry.insert(0, self.sx_entry.get())
         self.gui.wasatch_samples_countY_entry.delete(0, tk.END)
@@ -360,11 +370,13 @@ class MeasurementWizard(tk.Toplevel):
         return frame
 
     # ----- Step 7 -----
+
     def _run_step(self):
         frame = ttk.Frame(self.container)
         ttk.Label(
             frame,
             text="7) Run",
+
             font=("TkDefaultFont", 10, "bold"),
         ).pack(pady=PADY)
         ttk.Button(frame, text="Run area", command=self.gui.start_measurement).pack(
@@ -380,5 +392,6 @@ class MeasurementWizard(tk.Toplevel):
         self.gui.progress_var.trace_add(
             "write", lambda *args: self.run_label.config(text=f"{int(self.gui.progress_var.get())}%")
         )
+
         return frame
 
