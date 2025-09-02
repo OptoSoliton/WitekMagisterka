@@ -77,11 +77,18 @@ class MeasurementWizard(tk.Toplevel):
             text="Connect spectrometer",
             command=self.gui.connect_spectrometer,
         ).grid(row=2, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="ew")
+        ttk.Label(
+            frame,
+            text="Spectrometer optional – skip for wizard test",
+            wraplength=560,
+        ).grid(row=3, column=0, columnspan=3, padx=PADX, pady=(0, PADY), sticky="w")
+
         ttk.Button(
             frame,
             text="Browse CSV",
             command=self.gui.browse_file_path,
-        ).grid(row=3, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="ew")
+        ).grid(row=4, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="ew")
+
         frame.grid_columnconfigure(1, weight=1)
         return frame
 
@@ -163,11 +170,16 @@ class MeasurementWizard(tk.Toplevel):
         ttk.Button(frame, text="Apply", command=self._apply_spectrometer).grid(
             row=3, column=0, columnspan=4, padx=PADX, pady=PADY, sticky="ew"
         )
-        ttk.Button(
+        ttk.Label(
             frame,
-            text="Show/Hide plot",
-            command=self.gui.wasatch.toggle_plot,
-        ).grid(row=4, column=0, columnspan=4, padx=PADX, pady=PADY, sticky="ew")
+            text=(
+                "IT raises signal and time; AVG improves SNR; "
+                "Boxcar smooths noise; Delay enforces minimum interval."
+            ),
+            wraplength=560,
+            justify="left",
+        ).grid(row=4, column=0, columnspan=4, padx=PADX, pady=PADY, sticky="w")
+
         return frame
 
     def _apply_spectrometer(self):
@@ -192,10 +204,11 @@ class MeasurementWizard(tk.Toplevel):
             text="4) References",
             font=("TkDefaultFont", 10, "bold"),
         ).grid(row=0, column=0, columnspan=3, pady=(0, PADY))
-        ttk.Button(frame, text="Dark reference", command=self.gui.run_dark).grid(
+        ttk.Button(frame, text="Dark reference", command=self._run_dark).grid(
             row=1, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="ew"
         )
-        ttk.Button(frame, text="Light reference", command=self.gui.run_light).grid(
+        ttk.Button(frame, text="Light reference", command=self._run_light).grid(
+
             row=2, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="ew"
         )
         ttk.Label(frame, text="Label:").grid(row=3, column=0, padx=PADX, pady=PADY)
@@ -204,12 +217,34 @@ class MeasurementWizard(tk.Toplevel):
         ttk.Button(frame, text="Run once", command=self._run_once).grid(
             row=3, column=2, padx=PADX, pady=PADY
         )
+        ttk.Label(
+            frame,
+            text="Use references for later normalization; requires spectrometer.",
+            wraplength=560,
+            justify="left",
+        ).grid(row=4, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="w")
         return frame
+
+    def _run_dark(self):
+        if self.gui.wasatch.device:
+            self.gui.run_dark()
+        else:
+            self.gui.log("Spectrometer not connected")
+
+    def _run_light(self):
+        if self.gui.wasatch.device:
+            self.gui.run_light()
+        else:
+            self.gui.log("Spectrometer not connected")
 
     def _run_once(self):
         # Reuse label entry for run-once label
         self.gui.run_once_label = self.label_entry
-        self.gui.start_measurement_once()
+        if self.gui.wasatch.device:
+            self.gui.start_measurement_once()
+        else:
+            self.gui.log("Spectrometer not connected")
+
 
     # ----- Step 5 -----
     def _grid_step(self):
