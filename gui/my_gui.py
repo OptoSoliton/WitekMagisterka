@@ -135,7 +135,6 @@ class MyGUI:
         self.scans_to_average = 1
         self.boxcar_half_width = 0
         self.delay_ms = 1000
-        self.max_spectra = 0
 
         self.samples_count_x = 1
         self.samples_count_y = 1
@@ -222,7 +221,6 @@ class MyGUI:
             command=self.open_wizard,
         )
         self.wizard_button.grid(row=0, column=5, padx=PADX, pady=PADY)
-
 
         # Control frame for movement
         self.control_frame = ttk.LabelFrame(self.left_frame, text="CNC control", **FRAME_KWARGS)
@@ -426,7 +424,7 @@ class MyGUI:
         )
         self.set_scans_to_average_button.grid(row=0, column=5, padx=PADX, pady=(PADY, 0))
 
-        # second row: boxcar, delay and max spectra
+        # second row: boxcar and delay
         self.boxcar_half_width_label = ttk.Label(self.wasatch_parameters_frame, text="Boxcar half width:")
         self.boxcar_half_width_label.grid(row=1, column=0, padx=PADX, pady=(PADY, PADY), sticky="w")
         self.boxcar_half_width_entry = ttk.Entry(self.wasatch_parameters_frame)
@@ -445,23 +443,10 @@ class MyGUI:
         self.delay_ms_entry.insert(tk.END, str(self.delay_ms))
         self.set_delay_ms_button = ttk.Button(
             self.wasatch_parameters_frame, text="Set", command=self.set_delay_ms
-
         )
         self.set_delay_ms_button.grid(row=1, column=5, padx=PADX, pady=(PADY, PADY))
 
-        # third row: max spectra
-        self.max_spectra_label = ttk.Label(self.wasatch_parameters_frame, text="Max Spectra:")
-        self.max_spectra_label.grid(row=1, column=6, padx=PADX, pady=(PADY, PADY), sticky="w")
-        self.max_spectra_entry = ttk.Entry(self.wasatch_parameters_frame)
-        self.max_spectra_entry.grid(row=1, column=7, padx=PADX, pady=(PADY, PADY), sticky="ew")
-        self.max_spectra_entry.insert(tk.END, str(self.max_spectra))
-        self.set_max_spectra_button = ttk.Button(
-            self.wasatch_parameters_frame, text="Set", command=self.set_max_spectra
-
-        )
-        self.set_max_spectra_button.grid(row=1, column=8, padx=PADX, pady=(PADY, PADY))
-
-        for c in range(9):
+        for c in range(6):
             self.wasatch_parameters_frame.grid_columnconfigure(c, weight=1)
 
 
@@ -511,7 +496,6 @@ class MyGUI:
             text="0%",
             anchor="center",
             font=("TkDefaultFont", 8),
-
         )
         self.progress_label.place(relx=0.5, rely=0.5, anchor="center")
 
@@ -875,10 +859,6 @@ class MyGUI:
         self.delay_ms = delay_ms
         self.wasatch.set_delay_ms(delay_ms)
         self.update_time_estimate()
-
-    def set_max_spectra(self):
-        max_spectra = int(self.max_spectra_entry.get())
-        self.wasatch.set_max_spectra(max_spectra)
 
     def browse_file_path(self):
         file_path = filedialog.asksaveasfilename(defaultextension=".csv", filetypes=[("CSV files", "*.csv"), ("All files", "*.*")])

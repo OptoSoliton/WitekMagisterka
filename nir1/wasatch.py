@@ -197,7 +197,6 @@ class Wasatch:
         parser.add_argument("--boxcar-half-width",   type=int, default=0,      help="boxcar half-width (default 0)")
         parser.add_argument("--delay-ms",            type=int, default=1000,   help="delay between integrations (ms, default 1000)")
         parser.add_argument("--outfile",             type=str, default=None,   help="output filename (e.g. path/to/spectra.csv)")
-        parser.add_argument("--max",                 type=int, default=0,      help="max spectra to acquire (default 0, unlimited)")
         parser.add_argument("--non-blocking",        action="store_true",      help="non-blocking USB interface (WasatchDeviceWrapper instead of WasatchDevice)")
         parser.add_argument("--ascii-art",           action="store_true",      help="graph spectra in ASCII")
         parser.add_argument("--version",             action="store_true",      help="display Wasatch.PY version and exit")
@@ -400,10 +399,6 @@ class Wasatch:
     def set_delay_ms(self, delay_ms):
         self.args.delay_ms = delay_ms
         print(f'Delay set to {delay_ms} ms')
-
-    def set_max_spectra(self, max_spectra):
-        self.args.max = max_spectra
-        print(f'Max spectra set to {max_spectra}')
 
     def init_file(self):
         if not self.args.outfile:

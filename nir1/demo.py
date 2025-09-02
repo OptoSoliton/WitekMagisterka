@@ -75,7 +75,6 @@ class WasatchDemo:
         parser.add_argument("--boxcar-half-width",   type=int, default=0,      help="boxcar half-width (default 0)")
         parser.add_argument("--delay-ms",            type=int, default=1000,   help="delay between integrations (ms, default 1000)")
         parser.add_argument("--outfile",             type=str, default=None,   help="output filename (e.g. path/to/spectra.csv)")
-        parser.add_argument("--max",                 type=int, default=0,      help="max spectra to acquire (default 0, unlimited)")
         parser.add_argument("--non-blocking",        action="store_true",      help="non-blocking USB interface (WasatchDeviceWrapper instead of WasatchDevice)")
         parser.add_argument("--ascii-art",           action="store_true",      help="graph spectra in ASCII")
         parser.add_argument("--version",             action="store_true",      help="display Wasatch.PY version and exit")
@@ -176,20 +175,16 @@ class WasatchDemo:
             self.attempt_reading()
             end_time = datetime.datetime.now()
 
-            if self.args.max > 0 and self.reading_count >= self.args.max:
-                log.debug("max spectra reached, exiting")
-                self.exiting = True
-            else:
-                # compute how much longer we should wait before the next reading
-                reading_time_ms = int((end_time - start_time).microseconds / 1000)
-                sleep_ms = self.args.delay_ms - reading_time_ms
-                if sleep_ms > 0:
-                    log.debug("sleeping %d ms (%d ms already passed)", sleep_ms, reading_time_ms)
-                    try:
-                        time.sleep(float(sleep_ms) / 1000)
-                    except:
-                        # log.critical("WasatchDemo.run sleep() caught an exception", exc_info=1)
-                        self.exiting = True
+            # compute how much longer we should wait before the next reading
+            reading_time_ms = int((end_time - start_time).microseconds / 1000)
+            sleep_ms = self.args.delay_ms - reading_time_ms
+            if sleep_ms > 0:
+                log.debug("sleeping %d ms (%d ms already passed)", sleep_ms, reading_time_ms)
+                try:
+                    time.sleep(float(sleep_ms) / 1000)
+                except:
+                    # log.critical("WasatchDemo.run sleep() caught an exception", exc_info=1)
+                    self.exiting = True
 
         log.debug("WasatchDemo.run exiting")
 
