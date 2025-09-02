@@ -636,12 +636,22 @@ class MyGUI:
         self.points_frame = ttk.LabelFrame(self.plots_frame, text="Scan points", **FRAME_KWARGS)
         self.points_frame.grid(row=0, column=1, sticky='nsew', padx=PADX)
 
-        self.wasatch.init_points_plot(self.points_frame)
         zoom_frame = ttk.Frame(self.points_frame)
         zoom_frame.pack()
         ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 0.8, True)).pack(side="left")
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
         ttk.Button(zoom_frame, text="Open", command=self.open_points_window).pack(side="left")
+
+        self.wasatch.init_points_plot(self.points_frame)
+
+        self.show_marked_var = tk.IntVar(value=0)
+        ttk.Checkbutton(
+            self.points_frame,
+            text="Show marked positions",
+            variable=self.show_marked_var,
+            command=self.toggle_marked_points,
+        ).pack(side="bottom")
+
         self.toggle_head_plot()
         self.toggle_points_plot()
         self.calculate_predicted_points()
@@ -734,8 +744,15 @@ class MyGUI:
         if self.points_visible_var.get():
             self.points_frame.grid()
             self.wasatch.update_points_plot()
+            self.toggle_marked_points()
         else:
             self.points_frame.grid_remove()
+
+    def toggle_marked_points(self):
+        if self.show_marked_var.get():
+            self.wasatch.update_marked_points(self.marked_positions)
+        else:
+            self.wasatch.update_marked_points([])
 
     def open_map_window(self):
         if getattr(self, 'map_win', None):
@@ -770,13 +787,25 @@ class MyGUI:
         self.points_win = tk.Toplevel(self.root)
         self.points_win.title("Scan points")
         self.points_win.protocol('WM_DELETE_WINDOW', self.close_points_window)
+        zoom_frame = ttk.Frame(self.points_win)
+        zoom_frame.pack()
+        ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 0.8, True)).pack(side="left")
+        ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
         self.wasatch.init_points_plot(self.points_win)
+        ttk.Checkbutton(
+            self.points_win,
+            text="Show marked positions",
+            variable=self.show_marked_var,
+            command=self.toggle_marked_points,
+        ).pack(side="bottom")
+        self.toggle_marked_points()
 
     def close_points_window(self):
         if getattr(self, 'points_win', None):
             self.wasatch.points_canvas.get_tk_widget().destroy()
             self.wasatch.reset_points_fig_size()
             self.wasatch.init_points_plot(self.points_frame)
+            self.toggle_marked_points()
             self.points_frame.grid()
             self.points_visible_var.set(1)
             self.points_win.destroy()
@@ -1277,7 +1306,7 @@ class MyGUI:
         self.map_ax.set_ylabel('Y')
         self.map_ax.set_zlabel('Z')
         self.map_canvas.draw()
-        self.wasatch.update_marked_points(self.marked_positions)
+        self.toggle_marked_points()
 
 
     def set_position(self, position_number):
