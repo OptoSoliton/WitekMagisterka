@@ -47,7 +47,9 @@ class Wasatch:
         self.canvas = None
 
         # Figure for measured and predicted points (embedded by GUI)
-        self.points_fig = Figure(figsize=(2.5, 1.6875), dpi=100)
+        self.points_fig_default_size = (2.5, 1.6875)
+        self.points_fig = Figure(figsize=self.points_fig_default_size, dpi=100)
+
         self.points_ax = self.points_fig.add_subplot(111, projection='3d')
         try:
             self.points_ax.set_proj_type('ortho')
@@ -538,6 +540,9 @@ class Wasatch:
         self.points_canvas.draw()
         # use literal string to avoid depending on tkinter alias
         self.points_canvas.get_tk_widget().pack(fill="both", expand=True)
+
+    def reset_points_fig_size(self):
+        self.points_fig.set_size_inches(*self.points_fig_default_size)
 
     def init_spectrum_plot(self, frame):
         if self.canvas:
