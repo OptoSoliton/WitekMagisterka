@@ -39,18 +39,24 @@ class CNCSerial:
                 return True
         return False
 
-    def query_position(self):
+    def list_serial_ports(self):
+        return [port.device for port in serial.tools.list_ports.comports()]
+
+    def get_current_position(self):
         if self.serial_port and self.connected:
             try:
-                self.serial_port.write(b'?')
+                self.serial_port.reset_input_buffer()
+                self.serial_port.write(b'?\n')
                 time.sleep(0.05)
-                response = self.serial_port.read_until().decode()
-                match = re.search(r"MPos:([-\d\.]+),([-\d\.]+),([-\d\.]+)", response)
+                response = self.serial_port.read_until().decode().strip()
+                match = re.search(r'WPos:([\-\d\.]+),([\-\d\.]+),([\-\d\.]+)', response)
                 if match:
-                    return tuple(float(match.group(i)) for i in range(1, 4))
+                    return {
+                        'X': float(match.group(1)),
+                        'Y': float(match.group(2)),
+                        'Z': float(match.group(3)),
+                    }
             except Exception:
                 pass
         return None
 
-    def list_serial_ports(self):
-        return [port.device for port in serial.tools.list_ports.comports()]
