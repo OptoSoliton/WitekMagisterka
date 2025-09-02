@@ -47,6 +47,34 @@ class TkLogHandler(logging.Handler):
             pass
 
 
+class ToolTip:
+    """Simple tooltip implementation for Tkinter widgets."""
+
+    def __init__(self, widget, text, gui=None):
+        self.widget = widget
+        self.text = text
+        self.gui = gui
+        self.tipwindow = None
+        widget.bind("<Enter>", self.show)
+        widget.bind("<Leave>", self.hide)
+
+    def show(self, _event=None):
+        if self.tipwindow or not self.text:
+            return
+        x = self.widget.winfo_rootx() + 20
+        y = self.widget.winfo_rooty() + self.widget.winfo_height() + 5
+        self.tipwindow = tw = tk.Toplevel(self.widget)
+        tw.wm_overrideredirect(True)
+        tw.wm_geometry(f"+{x}+{y}")
+        label = tk.Label(tw, text=self.text, background="#ffffe0", relief="solid", borderwidth=1)
+        label.pack(ipadx=2)
+
+    def hide(self, _event=None):
+        tw = self.tipwindow
+        self.tipwindow = None
+        if tw:
+            tw.destroy()
+
 
 class MyGUI:
     def __init__(self, root, serial_connection, wasatch):
@@ -467,6 +495,7 @@ class MyGUI:
             state=tk.DISABLED,
         )
         self.wasatch_dark_button.grid(row=1, column=0, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
+        ToolTip(self.wasatch_dark_button, "Record dark reference at current position", self)
 
         self.wasatch_light_button = ttk.Button(
             self.wasatch_measure_frame,
@@ -475,6 +504,7 @@ class MyGUI:
             state=tk.DISABLED,
         )
         self.wasatch_light_button.grid(row=1, column=3, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
+        ToolTip(self.wasatch_light_button, "Record light reference at current position", self)
 
         # Progress bar with percentage overlay
         self.progress_var = tk.DoubleVar(value=0)
@@ -486,7 +516,12 @@ class MyGUI:
             maximum=100,
         )
         self.progress_bar.grid(row=2, column=0, columnspan=6, padx=PADX, pady=(PADY, 0), sticky="ew")
-        self.progress_label = ttk.Label(self.progress_bar, text="0 %", anchor="center")
+        self.progress_label = ttk.Label(
+            self.progress_bar,
+            text="0 %",
+            anchor="center",
+            font=("TkDefaultFont", 9),
+        )
         self.progress_label.place(relx=0.5, rely=0.5, anchor="center")
 
         # label and description on one row
@@ -577,6 +612,10 @@ class MyGUI:
         self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.position_label = ttk.Label(self.map_frame, text="X:0 Y:0 Z:0")
         self.position_label.pack()
+        theme_frame = ttk.Frame(self.map_frame)
+        theme_frame.pack()
+        ttk.Button(theme_frame, text="Light", command=lambda: self.set_theme(False)).pack(side="left", padx=(0, PADX))
+        ttk.Button(theme_frame, text="Dark", command=lambda: self.set_theme(True)).pack(side="left")
         ttk.Button(self.map_frame, text="Mark position", command=self.mark_current_position).pack(pady=(0, PADY))
 
         # Scan points (prawy wykres)
@@ -610,11 +649,14 @@ class MyGUI:
         self.wasatch_dark_button.config(state=tk.DISABLED)
         self.wasatch_light_button.config(state=tk.DISABLED)
 
-    def toggle_dark_mode(self):
-        self.dark_mode = not self.dark_mode
+    def set_theme(self, dark: bool):
+        self.dark_mode = dark
         self.apply_theme()
-        self.wasatch.set_dark_mode(self.dark_mode)
-        self.dark_button.config(text="Light Mode" if self.dark_mode else "Dark Mode")
+        self.wasatch.set_dark_mode(dark)
+        self.dark_button.config(text="Light Mode" if dark else "Dark Mode")
+
+    def toggle_dark_mode(self):
+        self.set_theme(not self.dark_mode)
 
     def apply_theme(self):
         if self.dark_mode:
@@ -694,7 +736,7 @@ class MyGUI:
             yspan = (ylim[1] - ylim[0]) * factor / 2
             ax.set_xlim(xmid - xspan, xmid + xspan)
             ax.set_ylim(ymid - yspan, ymid + yspan)
-        canvas.draw_idle()
+        canvas.draw()
         if ax is self.wasatch.points_ax:
             self.wasatch.points_zoomed = True
 
@@ -1000,11 +1042,16 @@ class MyGUI:
         self.root.after(0, _do)
 
     def auto_update_map(self):
-        self.update_map_position(
-            self.current_position['X'],
-            self.current_position['Y'],
-            self.current_position['Z']
-        )
+        pos = self.serial.query_position()
+        if pos:
+            self.update_map_position(pos['X'], pos['Y'], pos['Z'])
+        else:
+            self.update_map_position(
+                self.current_position['X'],
+                self.current_position['Y'],
+                self.current_position['Z']
+            )
+        self.map_canvas.draw_idle()
         self.root.after(200, self.auto_update_map)
 
 
