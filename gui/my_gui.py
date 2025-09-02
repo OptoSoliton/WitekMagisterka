@@ -119,6 +119,7 @@ class MyGUI:
 
         # Actual XYZ position
         self.current_position = {'X': 0, 'Y': 0, 'Z': 0}
+        self._last_drawn_pos = None
         # Positions 1-5 used to define scan volume
         # 1 - origin, 2 - X extent, 4 - Y extent, 5 - Z extent, 3 optional
         self.user_positions = {
@@ -200,6 +201,20 @@ class MyGUI:
 
         self.connect_button = ttk.Button(self.serial_connection_frame, text="Connect", command=self.toggle_connection)
         self.connect_button.grid(row=0, column=2, padx=PADX, pady=PADY)
+
+        self.light_theme_button = ttk.Button(
+            self.serial_connection_frame,
+            text="Light GUI mode",
+            command=lambda: self.set_theme(False),
+        )
+        self.light_theme_button.grid(row=0, column=3, padx=PADX, pady=PADY)
+
+        self.dark_theme_button = ttk.Button(
+            self.serial_connection_frame,
+            text="Dark GUI mode",
+            command=lambda: self.set_theme(True),
+        )
+        self.dark_theme_button.grid(row=0, column=4, padx=PADX, pady=PADY)
 
         # Control frame for movement
         self.control_frame = ttk.LabelFrame(self.left_frame, text="CNC control", **FRAME_KWARGS)
@@ -449,11 +464,11 @@ class MyGUI:
         # sample counts in a single row
         self.wasatch_samples_countX_entry = ttk.Entry(self.wasatch_measure_frame)
         self.wasatch_samples_countX_entry.grid(row=0, column=1, padx=PADX, pady=(PADY, 0), sticky="ew")
-        self.wasatch_samples_countX_entry.insert(tk.END, '10')
+        self.wasatch_samples_countX_entry.insert(tk.END, '1')
 
         self.wasatch_samples_countY_entry = ttk.Entry(self.wasatch_measure_frame)
         self.wasatch_samples_countY_entry.grid(row=0, column=3, padx=PADX, pady=(PADY, 0), sticky="ew")
-        self.wasatch_samples_countY_entry.insert(tk.END, '10')
+        self.wasatch_samples_countY_entry.insert(tk.END, '1')
 
         self.wasatch_samples_countZ_entry = ttk.Entry(self.wasatch_measure_frame)
         self.wasatch_samples_countZ_entry.grid(row=0, column=5, padx=PADX, pady=(PADY, 0), sticky="ew")
@@ -473,41 +488,6 @@ class MyGUI:
         ):
             entry.bind("<KeyRelease>", lambda e: self.calculate_predicted_points())
 
-        # Progress bar and percentage on same row
-        self.progress_bar = ttk.Progressbar(self.wasatch_measure_frame, orient="horizontal", length=300, mode="determinate")
-        self.progress_bar.grid(row=1, column=0, columnspan=5, padx=PADX, pady=(PADY, 0), sticky="ew")
-
-        self.progress_label = ttk.Label(self.wasatch_measure_frame, text="0 %", anchor="center")
-        self.progress_label.grid(row=1, column=5, padx=PADX, pady=(PADY, 0), sticky="e")
-
-        # label and description on one row
-        self.run_once_label = ttk.Label(self.wasatch_measure_frame, text="Label:")
-        self.run_once_label.grid(row=2, column=0, padx=PADX, pady=(PADY, 0), sticky="w")
-
-        self.run_once_description = ttk.Entry(self.wasatch_measure_frame, width=30)
-        self.run_once_description.grid(row=2, column=1, columnspan=5, padx=PADX, pady=(PADY, 0), sticky="ew")
-
-        # dark and light reference buttons after label
-
-        self.wasatch_dark_button = ttk.Button(
-            self.wasatch_measure_frame,
-            text="Dark",
-            command=self.run_dark,
-            state=tk.DISABLED,
-        )
-        self.wasatch_dark_button.grid(row=1, column=0, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
-        ToolTip(self.wasatch_dark_button, "Record dark reference at current position", self)
-
-
-        self.wasatch_light_button = ttk.Button(
-            self.wasatch_measure_frame,
-            text="Light",
-            command=self.run_light,
-            state=tk.DISABLED,
-        )
-        self.wasatch_light_button.grid(row=1, column=3, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
-        ToolTip(self.wasatch_light_button, "Record light reference at current position", self)
-
         # Progress bar with percentage overlay
         self.progress_var = tk.DoubleVar(value=0)
         self.progress_bar = ttk.Progressbar(
@@ -517,7 +497,7 @@ class MyGUI:
             variable=self.progress_var,
             maximum=100,
         )
-        self.progress_bar.grid(row=2, column=0, columnspan=6, padx=PADX, pady=(PADY, 0), sticky="ew")
+        self.progress_bar.grid(row=1, column=0, columnspan=6, padx=PADX, pady=(PADY, 0), sticky="ew")
         self.progress_label = ttk.Label(
             self.progress_bar,
             text="0 %",
@@ -528,11 +508,29 @@ class MyGUI:
 
         # label and description on one row
         self.run_once_label = ttk.Label(self.wasatch_measure_frame, text="Label:")
-        self.run_once_label.grid(row=3, column=0, padx=PADX, pady=(PADY, 0), sticky="w")
+        self.run_once_label.grid(row=2, column=0, padx=PADX, pady=(PADY, 0), sticky="w")
 
         self.run_once_description = ttk.Entry(self.wasatch_measure_frame, width=30)
-        self.run_once_description.grid(row=3, column=1, columnspan=5, padx=PADX, pady=(PADY, 0), sticky="ew")
+        self.run_once_description.grid(row=2, column=1, columnspan=5, padx=PADX, pady=(PADY, 0), sticky="ew")
 
+        # dark and light reference buttons below label
+        self.wasatch_dark_button = ttk.Button(
+            self.wasatch_measure_frame,
+            text="Dark reference",
+            command=self.run_dark,
+            state=tk.DISABLED,
+        )
+        self.wasatch_dark_button.grid(row=3, column=0, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
+        ToolTip(self.wasatch_dark_button, "Record dark reference at current position", self)
+
+        self.wasatch_light_button = ttk.Button(
+            self.wasatch_measure_frame,
+            text="Light reference",
+            command=self.run_light,
+            state=tk.DISABLED,
+        )
+        self.wasatch_light_button.grid(row=3, column=3, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
+        ToolTip(self.wasatch_light_button, "Record light reference at current position", self)
 
         # measurement control buttons
         self.run_once_button = ttk.Button(self.wasatch_measure_frame, text="Run once", command=self.start_measurement_once)
@@ -564,12 +562,6 @@ class MyGUI:
         self.continue_button.grid(row=5, column=3, columnspan=2, padx=PADX, pady=(PADY, 0), sticky="ew")
         ToolTip(self.continue_button, "Return to saved position and resume scan", self)
 
-
-        # Dark mode toggle inside measuring frame
-        self.dark_button = ttk.Button(self.wasatch_measure_frame, text="Dark Mode", command=self.toggle_dark_mode)
-        self.dark_button.grid(row=5, column=5, padx=PADX, pady=(PADY, 0), sticky="ew")
-        ToolTip(self.dark_button, "Toggle dark theme", self)
-
         self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
         self.estimated_time_label = ttk.Label(
             self.wasatch_measure_frame, textvariable=self.estimated_time_var
@@ -584,8 +576,8 @@ class MyGUI:
         # toggles for plot visibility
         self.view_frame = ttk.Frame(self.controls_frame)
         self.view_frame.pack(fill='x', padx=PADX, pady=1)
-        self.map_visible_var = tk.IntVar(value=1)
-        self.points_visible_var = tk.IntVar(value=1)
+        self.map_visible_var = tk.IntVar(value=0)
+        self.points_visible_var = tk.IntVar(value=0)
         ttk.Checkbutton(
             self.view_frame,
             text="Head 3D",
@@ -624,7 +616,7 @@ class MyGUI:
         # 3D head position (lewy wykres)
         self.map_frame = ttk.LabelFrame(self.plots_frame, text="Head position 3D", **FRAME_KWARGS)
         self.map_frame.grid(row=0, column=0, sticky='nsew', padx=(0, PADX))
-        self.map_fig = Figure(figsize=(4, 3), dpi=100)
+        self.map_fig = Figure(figsize=(4, 2.7), dpi=100)
 
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
         try:
@@ -642,10 +634,6 @@ class MyGUI:
         self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
         self.position_label = ttk.Label(self.map_frame, text="X:0 Y:0 Z:0")
         self.position_label.pack()
-        theme_frame = ttk.Frame(self.map_frame)
-        theme_frame.pack()
-        ttk.Button(theme_frame, text="Light", command=lambda: self.set_theme(False)).pack(side="left", padx=(0, PADX))
-        ttk.Button(theme_frame, text="Dark", command=lambda: self.set_theme(True)).pack(side="left")
         ttk.Button(self.map_frame, text="Mark position", command=self.mark_current_position).pack(pady=(0, PADY))
 
         # Scan points (prawy wykres)
@@ -658,7 +646,8 @@ class MyGUI:
         ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 0.8, True)).pack(side="left")
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
         ttk.Button(zoom_frame, text="Open", command=self.open_points_window).pack(side="left")
-
+        self.toggle_head_plot()
+        self.toggle_points_plot()
         self.calculate_predicted_points()
 
     def disable_controls(self):
@@ -684,10 +673,6 @@ class MyGUI:
         self.dark_mode = dark
         self.apply_theme()
         self.wasatch.set_dark_mode(dark)
-        self.dark_button.config(text="Light Mode" if dark else "Dark Mode")
-
-    def toggle_dark_mode(self):
-        self.set_theme(not self.dark_mode)
 
     def apply_theme(self):
         if self.dark_mode:
@@ -731,12 +716,14 @@ class MyGUI:
     def toggle_head_plot(self):
         if self.map_visible_var.get():
             self.map_frame.grid()
+            self.map_canvas.draw_idle()
         else:
             self.map_frame.grid_remove()
 
     def toggle_points_plot(self):
         if self.points_visible_var.get():
             self.points_frame.grid()
+            self.wasatch.update_points_plot()
         else:
             self.points_frame.grid_remove()
 
@@ -767,6 +754,8 @@ class MyGUI:
         if getattr(self, 'points_win', None):
             return
         self.points_visible_var.set(0)
+        if hasattr(self.wasatch, 'points_canvas'):
+            self.wasatch.points_canvas.get_tk_widget().destroy()
         self.points_frame.grid_remove()
         self.points_win = tk.Toplevel(self.root)
         self.points_win.title("Scan points")
@@ -775,8 +764,7 @@ class MyGUI:
 
     def close_points_window(self):
         if getattr(self, 'points_win', None):
-            for child in self.points_win.winfo_children():
-                child.destroy()
+            self.wasatch.points_canvas.get_tk_widget().destroy()
             self.wasatch.init_points_plot(self.points_frame)
             self.points_frame.grid()
             self.points_visible_var.set(1)
@@ -1083,10 +1071,12 @@ class MyGUI:
             command = f'G1 Y-{step} F{speed}'
         elif direction == '\u2190':  # Left (X-)
             self.current_position['X'] -= step
-            command = f'G1 X-{step} F{speed}'
+            # Invert X axis for CNC commands
+            command = f'G1 X{step} F{speed}'
         elif direction == '\u2192':  # Right (X+)
             self.current_position['X'] += step
-            command = f'G1 X{step} F{speed}'
+            # Invert X axis for CNC commands
+            command = f'G1 X-{step} F{speed}'
         elif direction == 'Up':  # Up (Z+)
             self.current_position['Z'] += step
             command = f'G1 Z{step} F{speed}'
@@ -1130,23 +1120,27 @@ class MyGUI:
             self.position_label.config(text=f"X:{x:.1f} Y:{y:.1f} Z:{z:.1f}")
             self.wasatch.position = (x, y, z)
             self.update_volume_display()
-        self.wasatch.update_points_plot()
+            if self.points_visible_var.get():
+                self.wasatch.update_points_plot()
+            self._last_drawn_pos = (x, y, z)
 
-        self.root.after(0, _do)
+        self.root.after_idle(_do)
 
     def auto_update_map(self):
-        pos = self.serial.query_position()
-
-        if pos:
-            self.update_map_position(pos['X'], pos['Y'], pos['Z'])
-        else:
-            self.update_map_position(
-                self.current_position['X'],
-                self.current_position['Y'],
-                self.current_position['Z']
-            )
-        self.map_canvas.draw_idle()
-        self.root.after(200, self.auto_update_map)
+        if self.map_visible_var.get() or getattr(self, 'map_win', None):
+            pos = self.serial.query_position()
+            if pos:
+                coords = (pos['X'], pos['Y'], pos['Z'])
+            else:
+                coords = (
+                    self.current_position['X'],
+                    self.current_position['Y'],
+                    self.current_position['Z'],
+                )
+            if self._last_drawn_pos != coords:
+                self.update_map_position(*coords)
+                self.map_canvas.draw_idle()
+        self.root.after(500, self.auto_update_map)
 
 
     def mark_current_position(self):
@@ -1244,14 +1238,18 @@ class MyGUI:
             ymin, ymax = min(ys), max(ys)
             zmin, zmax = min(zs), max(zs)
 
+            collapsed_x = xmin == xmax
+            collapsed_y = ymin == ymax
+            collapsed_z = zmin == zmax
+
             # Expand collapsed axes to avoid singular transformations
-            if xmin == xmax:
+            if collapsed_x:
                 xmin -= 0.5
                 xmax += 0.5
-            if ymin == ymax:
+            if collapsed_y:
                 ymin -= 0.5
                 ymax += 0.5
-            if zmin == zmax:
+            if collapsed_z:
                 zmin -= 0.5
                 zmax += 0.5
 
@@ -1260,9 +1258,12 @@ class MyGUI:
             self.map_ax.set_zlim(zmin, zmax)
 
             # Hide ticks when the corresponding axis collapses
-            self.map_ax.set_xticks([] if xmin == xmax else None)
-            self.map_ax.set_yticks([] if ymin == ymax else None)
-            self.map_ax.set_zticks([] if zmin == zmax else None)
+            if collapsed_x:
+                self.map_ax.set_xticks([])
+            if collapsed_y:
+                self.map_ax.set_yticks([])
+            if collapsed_z:
+                self.map_ax.set_zticks([])
 
         self.map_ax.set_box_aspect([1, 1, 1])
         self.map_ax.set_xlabel('X')
@@ -1296,7 +1297,8 @@ class MyGUI:
 
         self.serial.send_gcode('G91')
         cmd = (
-            f"G1 X{ delta_x } Y{ delta_y } Z{ delta_z } F{self.get_speed()}"
+            # Invert X axis for CNC commands
+            f"G1 X{ -delta_x } Y{ delta_y } Z{ delta_z } F{self.get_speed()}"
         )
         self.serial.send_gcode(cmd)
         self.waitForCNC()
@@ -1333,7 +1335,8 @@ class MyGUI:
         for e in edges:
             target = corners[e[1]]
             cmd = (
-                f"G1 X{ target[0] } Y{ target[1] } Z{ target[2] } F{self.get_speed()}"
+                # Invert X axis for CNC commands
+                f"G1 X{ -target[0] } Y{ target[1] } Z{ target[2] } F{self.get_speed()}"
             )
             self.serial.send_gcode(cmd)
             self.log(f"Moving to {target}")
@@ -1449,7 +1452,8 @@ class MyGUI:
         # ensure absolute coordinates and move to starting point
         self.serial.send_gcode('G90')
         start_cmd = (
-            f"G1 X{start_x} Y{start_y} Z{start_z} F{self.get_speed()}"
+            # Invert X axis for CNC commands
+            f"G1 X{-start_x} Y{start_y} Z{start_z} F{self.get_speed()}"
         )
         self.serial.send_gcode(start_cmd)
         self.log(
@@ -1484,7 +1488,8 @@ class MyGUI:
                         abs_y = start_y + j * step_y
                         self.log(f"    Y step {j+1}/{self.samples_count_y} at Y={abs_y}")
                         move_command = (
-                            f"G1 X{abs_x} Y{abs_y} Z{abs_z} F{self.get_speed()}"
+                            # Invert X axis for CNC commands
+                            f"G1 X{-abs_x} Y{abs_y} Z{abs_z} F{self.get_speed()}"
                         )
                         self.serial.send_gcode(move_command)
                         self.log(
@@ -1659,7 +1664,8 @@ class MyGUI:
             return
         # return to stored pause position
         target = self.pause_position
-        move_cmd = f"G1 X{target['X']} Y{target['Y']} Z{target['Z']} F{self.get_speed()}"
+        # Invert X axis for CNC commands
+        move_cmd = f"G1 X{-target['X']} Y{target['Y']} Z{target['Z']} F{self.get_speed()}"
         self.serial.send_gcode('G90')
         self.serial.send_gcode(move_cmd)
         self.waitForCNC()
