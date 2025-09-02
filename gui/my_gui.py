@@ -1083,10 +1083,12 @@ class MyGUI:
             command = f'G1 Y-{step} F{speed}'
         elif direction == '\u2190':  # Left (X-)
             self.current_position['X'] -= step
-            command = f'G1 X-{step} F{speed}'
+            # Invert X axis for CNC commands
+            command = f'G1 X{step} F{speed}'
         elif direction == '\u2192':  # Right (X+)
             self.current_position['X'] += step
-            command = f'G1 X{step} F{speed}'
+            # Invert X axis for CNC commands
+            command = f'G1 X-{step} F{speed}'
         elif direction == 'Up':  # Up (Z+)
             self.current_position['Z'] += step
             command = f'G1 Z{step} F{speed}'
@@ -1244,14 +1246,18 @@ class MyGUI:
             ymin, ymax = min(ys), max(ys)
             zmin, zmax = min(zs), max(zs)
 
+            collapsed_x = xmin == xmax
+            collapsed_y = ymin == ymax
+            collapsed_z = zmin == zmax
+
             # Expand collapsed axes to avoid singular transformations
-            if xmin == xmax:
+            if collapsed_x:
                 xmin -= 0.5
                 xmax += 0.5
-            if ymin == ymax:
+            if collapsed_y:
                 ymin -= 0.5
                 ymax += 0.5
-            if zmin == zmax:
+            if collapsed_z:
                 zmin -= 0.5
                 zmax += 0.5
 
@@ -1260,9 +1266,12 @@ class MyGUI:
             self.map_ax.set_zlim(zmin, zmax)
 
             # Hide ticks when the corresponding axis collapses
-            self.map_ax.set_xticks([] if xmin == xmax else None)
-            self.map_ax.set_yticks([] if ymin == ymax else None)
-            self.map_ax.set_zticks([] if zmin == zmax else None)
+            if collapsed_x:
+                self.map_ax.set_xticks([])
+            if collapsed_y:
+                self.map_ax.set_yticks([])
+            if collapsed_z:
+                self.map_ax.set_zticks([])
 
         self.map_ax.set_box_aspect([1, 1, 1])
         self.map_ax.set_xlabel('X')
@@ -1296,7 +1305,8 @@ class MyGUI:
 
         self.serial.send_gcode('G91')
         cmd = (
-            f"G1 X{ delta_x } Y{ delta_y } Z{ delta_z } F{self.get_speed()}"
+            # Invert X axis for CNC commands
+            f"G1 X{ -delta_x } Y{ delta_y } Z{ delta_z } F{self.get_speed()}"
         )
         self.serial.send_gcode(cmd)
         self.waitForCNC()
@@ -1333,7 +1343,8 @@ class MyGUI:
         for e in edges:
             target = corners[e[1]]
             cmd = (
-                f"G1 X{ target[0] } Y{ target[1] } Z{ target[2] } F{self.get_speed()}"
+                # Invert X axis for CNC commands
+                f"G1 X{ -target[0] } Y{ target[1] } Z{ target[2] } F{self.get_speed()}"
             )
             self.serial.send_gcode(cmd)
             self.log(f"Moving to {target}")
@@ -1449,7 +1460,8 @@ class MyGUI:
         # ensure absolute coordinates and move to starting point
         self.serial.send_gcode('G90')
         start_cmd = (
-            f"G1 X{start_x} Y{start_y} Z{start_z} F{self.get_speed()}"
+            # Invert X axis for CNC commands
+            f"G1 X{-start_x} Y{start_y} Z{start_z} F{self.get_speed()}"
         )
         self.serial.send_gcode(start_cmd)
         self.log(
@@ -1484,7 +1496,8 @@ class MyGUI:
                         abs_y = start_y + j * step_y
                         self.log(f"    Y step {j+1}/{self.samples_count_y} at Y={abs_y}")
                         move_command = (
-                            f"G1 X{abs_x} Y{abs_y} Z{abs_z} F{self.get_speed()}"
+                            # Invert X axis for CNC commands
+                            f"G1 X{-abs_x} Y{abs_y} Z{abs_z} F{self.get_speed()}"
                         )
                         self.serial.send_gcode(move_command)
                         self.log(
@@ -1659,7 +1672,8 @@ class MyGUI:
             return
         # return to stored pause position
         target = self.pause_position
-        move_cmd = f"G1 X{target['X']} Y{target['Y']} Z{target['Z']} F{self.get_speed()}"
+        # Invert X axis for CNC commands
+        move_cmd = f"G1 X{-target['X']} Y{target['Y']} Z{target['Z']} F{self.get_speed()}"
         self.serial.send_gcode('G90')
         self.serial.send_gcode(move_cmd)
         self.waitForCNC()
