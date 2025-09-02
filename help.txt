@@ -6,9 +6,26 @@ Połącz spektrometr (Connect spectrometer). Statusy zobaczysz w logu.
 
 Wskaż plik CSV (File path → Browse). Jeśli pominiesz, program sam utworzy NIRv2_Witek/scan*.csv w katalogu roboczym.
 
-Zdefiniuj naroża: Set 1 (początek), Set 2 (X), Set 4 (Y), opcjonalnie Set 5 (Z-góra). Test przed startem. (Pozycje 1–4–5 i test opisane w kodzie i pracy mgr).
+
+Zdefiniuj naroża: Set 1 (początek), Set 2 (X), Set 4 (Y), opcjonalnie Set 3 oraz Set 5 (Z-góra). Opcjonalnie Test (nie jest w pełni zanimplementowany do 3D*) przed startem.
 
 Ustaw parametry spektrometru: Integration Time, Scans to Average, Boxcar Half-Width, Delay (ms). Przyciski Set wysyłają ustawienia do urządzenia.
+**
+Integration Time (ms)
+Co to robi: czas integracji detektora na 1 odczyt. Im wyższy, tym większy sygnał.
+Wpływ: zwiększa czas na punkt ≈ IT (pomnożone przez AVG), podbija SNR, ale ryzykuje nasycenie (płaskie czapy na wykresie). Po zmianie używany od kolejnego odczytu; ETA przelicza się automatycznie. 
+
+Scans to Average (AVG)
+Co to robi: spektrometr wykona N skanów i zwróci uśrednione widmo.
+Wpływ: czas ≈ N × IT ( + narzuty ), SNR poprawia się ~√N. Zbyt duże N dramatycznie wydłuży serię. ETA aktualizowana po „Set”. 
+
+Boxcar half width
+Co to robi: wygładzanie widma po stronie oprogramowania/łańcucha akwizycji (okno 2·N+1).
+Wpływ: zmniejsza szum i ząbkowanie, ale rozmywa wąskie piki. Nie zmienia czasu CNC ani dojazdów; obciążenie CPU pomijalne. 
+
+Delay (ms)
+Co to robi: wymusza minimalny interwał pomiędzy kolejnymi odczytami. Program dosypia różnicę, jeśli odczyt+narzuty trwał krócej.
+Wpływ: ogranicza tempo próbkowania. Jeśli (AVG×IT) > Delay — Delay nie przyspieszy niczego. ETA liczy Delay + narzuty.
 
 Podaj ilość próbek po X/Y/Z. Przy braku zakresu na osi program wymusi 1.
 
@@ -18,30 +35,24 @@ Start: Run-area measurement (siatka) lub Single measurement (pojedynczy).
 
 W trakcie skanu możesz Pause for reference → Dark/Light → Continue. Dark wymagany do wznowienia.
 
+Po wciśnięciu continue głowica wraca na miejsce w którym wciskało się pause.
+
 Po skanie sprawdź log i CSV; aplikacja porówna liczbę linii z oczekiwaną.
 
+
 2) Układ interfejsu i przyciski
+
 A. Połączenia
 
 CNC Port + Connect/Disconnect — nawiązuje/kończy łączność z GRBL (log pokazuje wynik connect_cnc/disconnect_cnc).
 
 Connect spectrometer — inicjalizuje połączenie z Wasatch.PY, log: „Connecting… / Spectrometer connected / No spectrometer found”.
 
+
 B. File path for spectra
 
 Pole ścieżki + Browse — wybór wyjściowego CSV.
-
 Auto-ścieżka: jeśli puste, ensure_file_path() tworzy folder NIRv2_Witek i unikalne scan.csv, scan_1.csv itd.
-
-C. Parameters (Wasatch)
-
-Integration Time (ms) — czas integracji, Set wysyła do urządzenia i przelicza czas.
-
-Scans to Average — uśrednianie, Set → urządzenie + przeliczenie czasu.
-
-Boxcar Half-Width — filtracja widma (0 = wyłączony).
-
-Delay (ms) — dodatkowa zwłoka na punkt; Set też aktualizuje estymację.
 
 D. Definiowanie obszaru
 
@@ -147,6 +158,7 @@ Scan points: przewidywane i zebrane punkty; zoom (🔍+ / 🔍−), „Open” p
 
 Kierunki: Y↑ – przód (+Y), Y↓ – tył (−Y), X→ – prawo (+X), X← – lewo (−X), Z↑/Z↓ – góra/dół.
 
+
 Uwaga – X: w komendach GRBL znak X jest negowany względem mapy (zamierzone). W move(), goto_position(), test_positions() widać to jako X{-…} podczas wysyłania G-code.
 
 Zero: G92 X0 Y0 Z0.
@@ -183,7 +195,7 @@ Bez spektrometru: można klikać UI, ale nie zapiszesz widm; pojawią się błę
 
 Bez CNC: Run-area nie wystartuje („CNC not connected”); Single measurement (bez ruchu) może posłużyć do testu spektrometru.
 
-W trybie „Connections and file path” baner informuje o brakach (CNC/spektrometr/CSV). (Mechanizm banera w wizardzie).
+W trybie „Connections and file path” baner informuje o brakach (CNC/spektrometr/CSV).
 
 13) Dobre praktyki
 
