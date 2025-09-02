@@ -1,6 +1,7 @@
 import serial
 import serial.tools.list_ports
 import time
+import re
 
 class CNCSerial:
     def __init__(self):
@@ -40,3 +41,25 @@ class CNCSerial:
 
     def list_serial_ports(self):
         return [port.device for port in serial.tools.list_ports.comports()]
+
+    def get_current_position(self):
+        if self.serial_port and self.connected:
+            try:
+                self.serial_port.reset_input_buffer()
+                self.serial_port.write(b'?\n')
+                time.sleep(0.05)
+                response = self.serial_port.read_until().decode().strip()
+                match = re.search(r'WPos:([\-\d\.]+),([\-\d\.]+),([\-\d\.]+)', response)
+                if match:
+                    return {
+                        'X': float(match.group(1)),
+                        'Y': float(match.group(2)),
+                        'Z': float(match.group(3)),
+                    }
+            except Exception:
+                pass
+        return None
+
+    def query_position(self):
+        """Backward-compatible wrapper for current position queries."""
+        return self.get_current_position()
