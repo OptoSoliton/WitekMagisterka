@@ -5,6 +5,7 @@ import time
 import threading
 import numpy as np
 import logging
+from pathlib import Path
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure  # required for embedded plots
 
@@ -115,7 +116,7 @@ class MyGUI:
 
         self.style = ttk.Style(self.root)
         self.style.theme_use('clam')
-        self.dark_mode = True
+        self.dark_mode = False
 
         # Actual XYZ position
         self.current_position = {'X': 0, 'Y': 0, 'Z': 0}
@@ -215,12 +216,14 @@ class MyGUI:
         )
         self.dark_theme_button.grid(row=0, column=4, padx=PADX, pady=PADY)
 
-        self.wizard_button = ttk.Button(
+        self.help_button = tk.Button(
             self.serial_connection_frame,
-            text="Wizard",
-            command=self.open_wizard,
+            text="Help",
+            command=self.open_help,
+            bg='red',
+            fg='white',
         )
-        self.wizard_button.grid(row=0, column=5, padx=PADX, pady=PADY)
+        self.help_button.grid(row=0, column=5, padx=PADX, pady=PADY)
 
         # Control frame for movement
         self.control_frame = ttk.LabelFrame(self.left_frame, text="CNC control", **FRAME_KWARGS)
@@ -569,8 +572,8 @@ class MyGUI:
         # toggles for plot visibility
         self.view_frame = ttk.Frame(self.controls_frame)
         self.view_frame.pack(fill='x', padx=PADX, pady=1)
-        self.map_visible_var = tk.IntVar(value=0)
-        self.points_visible_var = tk.IntVar(value=0)
+        self.map_visible_var = tk.IntVar(value=1)
+        self.points_visible_var = tk.IntVar(value=1)
         ttk.Checkbutton(
             self.view_frame,
             text="Head 3D",
@@ -608,8 +611,8 @@ class MyGUI:
 
         # 3D head position (lewy wykres)
         self.map_frame = ttk.LabelFrame(self.plots_frame, text="Head position 3D", **FRAME_KWARGS)
-        self.map_frame.grid(row=0, column=0, sticky='nsew', padx=(0, PADX))
-        self.map_fig = Figure(figsize=(4, 2.7), dpi=100)
+        self.map_frame.grid(row=0, column=0, sticky='nsew', padx=PADX)
+        self.map_fig = Figure(figsize=(2.5, 1.6875), dpi=100)
 
         self.map_ax = self.map_fig.add_subplot(111, projection='3d')
         try:
@@ -631,7 +634,7 @@ class MyGUI:
 
         # Scan points (prawy wykres)
         self.points_frame = ttk.LabelFrame(self.plots_frame, text="Scan points", **FRAME_KWARGS)
-        self.points_frame.grid(row=0, column=1, sticky='nsew')
+        self.points_frame.grid(row=0, column=1, sticky='nsew', padx=PADX)
 
         self.wasatch.init_points_plot(self.points_frame)
         zoom_frame = ttk.Frame(self.points_frame)
@@ -706,15 +709,19 @@ class MyGUI:
 
                 axis.line.set_color(fg)
 
-    def open_wizard(self):
+    def open_help(self):
+        help_path = Path(__file__).resolve().parent.parent / "help.txt"
         try:
-            from .wizard import MeasurementWizard
-        except Exception:
-            from wizard import MeasurementWizard
-        if getattr(self, 'wizard', None) and self.wizard.winfo_exists():
-            self.wizard.lift()
-        else:
-            self.wizard = MeasurementWizard(self)
+            content = help_path.read_text(encoding="utf-8")
+        except Exception as e:
+            messagebox.showerror("Error", f"Failed to load help file: {e}")
+            return
+        win = tk.Toplevel(self.root)
+        win.title("Help")
+        text = scrolledtext.ScrolledText(win, wrap='word', width=100, height=40)
+        text.insert('1.0', content)
+        text.config(state='disabled')
+        text.pack(fill='both', expand=True)
 
     def toggle_head_plot(self):
         if self.map_visible_var.get():
