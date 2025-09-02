@@ -5,6 +5,20 @@ PADX = 3
 PADY = 2
 
 
+class InfoBanner(ttk.Frame):
+    def __init__(self, parent, text="", kind="warn"):
+        super().__init__(parent)
+        bg = "#FDE8E8" if kind == "error" else "#FFF4E5"
+        fg = "#611A15" if kind == "error" else "#5F370E"
+        self._label = ttk.Label(self, text=text, anchor="w", justify="left")
+        self._label.pack(fill="x", padx=6, pady=4)
+        self._label.configure(background=bg, foreground=fg)
+
+    def set(self, text, kind="warn"):
+        self._label.configure(text=text)
+
+
+
 class MeasurementWizard(tk.Toplevel):
     """Step-by-step wizard guiding through measurement setup."""
 
@@ -34,6 +48,7 @@ class MeasurementWizard(tk.Toplevel):
             self._spectrometer_step(),
             self._references_step(),
             self._grid_step(),
+            self._time_step(),
             self._run_step(),
         ]
 
@@ -45,6 +60,30 @@ class MeasurementWizard(tk.Toplevel):
         self.back_btn.config(state=state)
         text = "Finish" if self.current == len(self.steps) - 1 else "Next"
         self.next_btn.config(text=text)
+        try:
+            self._update_banners_for_step()
+        except Exception:
+            pass
+        if self.current == 1:
+            if not self.gui.user_positions.get('5'):
+                self.gui.wasatch_samples_countZ_entry.delete(0, tk.END)
+                self.gui.wasatch_samples_countZ_entry.insert(0, '1')
+                if hasattr(self, 'z_warn'):
+                    self.z_warn.set("Point 5 not set – Z samples will be forced to 1.")
+            elif hasattr(self, 'z_warn'):
+                self.z_warn.set("")
+
+    def _update_banners_for_step(self):
+        if self.current == 0:
+            msgs = []
+            if not self.gui.serial.connected:
+                msgs.append("CNC not connected – motions will be simulated.")
+            if not getattr(self.gui.wasatch, "device", None):
+                msgs.append("Spectrometer not connected – spectra will not be saved.")
+            if not self.gui.file_path_entry.get():
+                msgs.append("No CSV selected – measurements will not be written.")
+            self.conn_banner.set("\n".join(msgs) if msgs else "All set.")
+
 
     def _next(self):
         if self.current < len(self.steps) - 1:
@@ -82,12 +121,13 @@ class MeasurementWizard(tk.Toplevel):
             text="Spectrometer optional – skip for wizard test",
             wraplength=560,
         ).grid(row=3, column=0, columnspan=3, padx=PADX, pady=(0, PADY), sticky="w")
-
         ttk.Button(
             frame,
             text="Browse CSV",
             command=self.gui.browse_file_path,
         ).grid(row=4, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="ew")
+        self.conn_banner = InfoBanner(frame, "")
+        self.conn_banner.grid(row=5, column=0, columnspan=3, sticky="ew", padx=PADX, pady=(0, PADY))
 
         frame.grid_columnconfigure(1, weight=1)
         return frame
@@ -103,7 +143,8 @@ class MeasurementWizard(tk.Toplevel):
         frame = ttk.Frame(self.container)
         ttk.Label(
             frame,
-            text="2) Motion and area",
+            text="2) Motion and volume (XYZ)",
+
             font=("TkDefaultFont", 10, "bold"),
         ).grid(row=0, column=0, columnspan=4, pady=(0, PADY))
         ttk.Label(frame, text="Step:").grid(row=1, column=0, padx=PADX, pady=PADY)
@@ -126,15 +167,33 @@ class MeasurementWizard(tk.Toplevel):
         ttk.Button(frame, text="Set 1", command=lambda: self.gui.set_position(1)).grid(
             row=4, column=0, padx=PADX, pady=PADY
         )
-        ttk.Button(frame, text="Set 2", command=lambda: self.gui.set_position(2)).grid(
+        ttk.Button(frame, text="Go to 1", command=lambda: self.gui.goto_position(1)).grid(
             row=4, column=1, padx=PADX, pady=PADY
         )
+        ttk.Button(frame, text="Set 2", command=lambda: self.gui.set_position(2)).grid(
+            row=5, column=0, padx=PADX, pady=PADY
+        )
+        ttk.Button(frame, text="Go to 2", command=lambda: self.gui.goto_position(2)).grid(
+            row=5, column=1, padx=PADX, pady=PADY
+        )
         ttk.Button(frame, text="Set 4", command=lambda: self.gui.set_position(4)).grid(
-            row=4, column=2, padx=PADX, pady=PADY
+            row=6, column=0, padx=PADX, pady=PADY
         )
-        ttk.Button(frame, text="Test", command=self.gui.test_positions).grid(
-            row=4, column=3, padx=PADX, pady=PADY
+        ttk.Button(frame, text="Go to 4", command=lambda: self.gui.goto_position(4)).grid(
+            row=6, column=1, padx=PADX, pady=PADY
         )
+        ttk.Button(frame, text="Set 5 (Z max)", command=lambda: self.gui.set_position(5)).grid(
+            row=7, column=0, padx=PADX, pady=PADY
+        )
+        ttk.Button(frame, text="Go to 5", command=lambda: self.gui.goto_position(5)).grid(
+            row=7, column=1, padx=PADX, pady=PADY
+        )
+        ttk.Button(frame, text="Test path", command=self.gui.test_positions).grid(
+            row=8, column=0, columnspan=4, padx=PADX, pady=PADY, sticky="ew"
+        )
+        self.z_warn = InfoBanner(frame, "")
+        self.z_warn.grid(row=9, column=0, columnspan=4, sticky="ew", padx=PADX, pady=(0, PADY))
+
         return frame
 
     def _apply_motion(self):
@@ -201,28 +260,28 @@ class MeasurementWizard(tk.Toplevel):
         frame = ttk.Frame(self.container)
         ttk.Label(
             frame,
-            text="4) References",
+            text="4) References & single test",
             font=("TkDefaultFont", 10, "bold"),
         ).grid(row=0, column=0, columnspan=3, pady=(0, PADY))
-        ttk.Button(frame, text="Dark reference", command=self._run_dark).grid(
+        ttk.Button(frame, text="Pause for reference", command=self.gui.pause_for_reference).grid(
             row=1, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="ew"
         )
-        ttk.Button(frame, text="Light reference", command=self._run_light).grid(
-
+        ttk.Button(frame, text="Dark reference", command=self._run_dark).grid(
             row=2, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="ew"
         )
-        ttk.Label(frame, text="Label:").grid(row=3, column=0, padx=PADX, pady=PADY)
-        self.label_entry = ttk.Entry(frame)
-        self.label_entry.grid(row=3, column=1, padx=PADX, pady=PADY)
-        ttk.Button(frame, text="Run once", command=self._run_once).grid(
-            row=3, column=2, padx=PADX, pady=PADY
+        ttk.Button(frame, text="Light reference", command=self._run_light).grid(
+            row=3, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="ew"
         )
-        ttk.Label(
-            frame,
-            text="Use references for later normalization; requires spectrometer.",
-            wraplength=560,
-            justify="left",
-        ).grid(row=4, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="w")
+        ttk.Button(frame, text="Continue", command=self.gui.continue_measurement).grid(
+            row=4, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="ew"
+        )
+        ttk.Label(frame, text="Label:").grid(row=5, column=0, padx=PADX, pady=PADY)
+        self.label_entry = ttk.Entry(frame)
+        self.label_entry.grid(row=5, column=1, padx=PADX, pady=PADY)
+        ttk.Button(frame, text="Run once", command=self._run_once).grid(
+            row=5, column=2, padx=PADX, pady=PADY
+        )
+
         return frame
 
     def _run_dark(self):
@@ -251,7 +310,8 @@ class MeasurementWizard(tk.Toplevel):
         frame = ttk.Frame(self.container)
         ttk.Label(
             frame,
-            text="5) Grid",
+            text="5) Grid (X×Y×Z)",
+
             font=("TkDefaultFont", 10, "bold"),
         ).grid(row=0, column=0, columnspan=4, pady=(0, PADY))
         ttk.Label(frame, text="Samples X:").grid(row=1, column=0, padx=PADX, pady=PADY)
@@ -262,24 +322,61 @@ class MeasurementWizard(tk.Toplevel):
         self.sy_entry = ttk.Entry(frame)
         self.sy_entry.insert(0, self.gui.wasatch_samples_countY_entry.get())
         self.sy_entry.grid(row=1, column=3, padx=PADX, pady=PADY)
-        ttk.Button(frame, text="Apply", command=self._apply_grid).grid(
-            row=2, column=0, columnspan=4, padx=PADX, pady=PADY, sticky="ew"
+        ttk.Label(frame, text="Samples Z:").grid(row=2, column=0, padx=PADX, pady=PADY)
+        self.sz_entry = ttk.Entry(frame)
+        self.sz_entry.insert(0, self.gui.wasatch_samples_countZ_entry.get())
+        self.sz_entry.grid(row=2, column=1, padx=PADX, pady=PADY)
+        ttk.Button(frame, text="Apply & Recompute", command=self._apply_grid_3d).grid(
+            row=3, column=0, columnspan=4, padx=PADX, pady=PADY, sticky="ew"
         )
+        self.eta_lbl = ttk.Label(frame, textvariable=self.gui.estimated_time_var)
+        self.eta_lbl.grid(row=4, column=0, columnspan=4, padx=PADX, pady=PADY, sticky="ew")
         return frame
 
-    def _apply_grid(self):
+    def _apply_grid_3d(self):
+
         self.gui.wasatch_samples_countX_entry.delete(0, tk.END)
         self.gui.wasatch_samples_countX_entry.insert(0, self.sx_entry.get())
         self.gui.wasatch_samples_countY_entry.delete(0, tk.END)
         self.gui.wasatch_samples_countY_entry.insert(0, self.sy_entry.get())
+        self.gui.wasatch_samples_countZ_entry.delete(0, tk.END)
+        self.gui.wasatch_samples_countZ_entry.insert(0, self.sz_entry.get())
         self.gui.calculate_predicted_points()
+        self.gui.update_time_estimate()
 
     # ----- Step 6 -----
+    def _time_step(self):
+        frame = ttk.Frame(self.container)
+        ttk.Label(
+            frame,
+            text="6) Time & path",
+            font=("TkDefaultFont", 10, "bold"),
+        ).grid(row=0, column=0, columnspan=2, pady=(0, PADY))
+        ttk.Label(frame, textvariable=self.gui.estimated_time_var).grid(
+            row=1, column=0, columnspan=2, padx=PADX, pady=PADY, sticky="ew"
+        )
+        ttk.Checkbutton(
+            frame,
+            text="Head 3D",
+            variable=self.gui.map_visible_var,
+            command=self.gui.toggle_head_plot,
+        ).grid(row=2, column=0, padx=PADX, pady=PADY)
+        ttk.Checkbutton(
+            frame,
+            text="Scan points",
+            variable=self.gui.points_visible_var,
+            command=self.gui.toggle_points_plot,
+        ).grid(row=2, column=1, padx=PADX, pady=PADY)
+        return frame
+
+    # ----- Step 7 -----
+
     def _run_step(self):
         frame = ttk.Frame(self.container)
         ttk.Label(
             frame,
-            text="6) Run",
+            text="7) Run",
+
             font=("TkDefaultFont", 10, "bold"),
         ).pack(pady=PADY)
         ttk.Button(frame, text="Run area", command=self.gui.start_measurement).pack(
@@ -288,5 +385,13 @@ class MeasurementWizard(tk.Toplevel):
         ttk.Button(frame, text="Stop", command=self.gui.stop_measurement).pack(
             fill="x", padx=PADX, pady=PADY
         )
+        pb = ttk.Progressbar(frame, variable=self.gui.progress_var, maximum=100)
+        pb.pack(fill="x", padx=PADX, pady=PADY)
+        self.run_label = ttk.Label(frame, text="0%")
+        self.run_label.pack(pady=PADY)
+        self.gui.progress_var.trace_add(
+            "write", lambda *args: self.run_label.config(text=f"{int(self.gui.progress_var.get())}%")
+        )
+
         return frame
 
