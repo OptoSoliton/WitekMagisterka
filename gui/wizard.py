@@ -82,11 +82,13 @@ class MeasurementWizard(tk.Toplevel):
             text="Spectrometer optional – skip for wizard test",
             wraplength=560,
         ).grid(row=3, column=0, columnspan=3, padx=PADX, pady=(0, PADY), sticky="w")
+
         ttk.Button(
             frame,
             text="Browse CSV",
             command=self.gui.browse_file_path,
         ).grid(row=4, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="ew")
+
         frame.grid_columnconfigure(1, weight=1)
         return frame
 
@@ -177,6 +179,7 @@ class MeasurementWizard(tk.Toplevel):
             wraplength=560,
             justify="left",
         ).grid(row=4, column=0, columnspan=4, padx=PADX, pady=PADY, sticky="w")
+
         return frame
 
     def _apply_spectrometer(self):
@@ -205,6 +208,7 @@ class MeasurementWizard(tk.Toplevel):
             row=1, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="ew"
         )
         ttk.Button(frame, text="Light reference", command=self._run_light).grid(
+
             row=2, column=0, columnspan=3, padx=PADX, pady=PADY, sticky="ew"
         )
         ttk.Label(frame, text="Label:").grid(row=3, column=0, padx=PADX, pady=PADY)
@@ -240,6 +244,7 @@ class MeasurementWizard(tk.Toplevel):
             self.gui.start_measurement_once()
         else:
             self.gui.log("Spectrometer not connected")
+
 
     # ----- Step 5 -----
     def _grid_step(self):
