@@ -155,6 +155,7 @@ class MyGUI:
         self.paused = False
         self.measure_thread = threading.Thread()
         self.pause_position = None
+        self.poll_head_position()
 
         self.auto_update_map()
 
@@ -386,10 +387,8 @@ class MyGUI:
         self.integration_time_entry.grid(row=0, column=1, padx=PADX, pady=(PADY, 0), sticky="ew")
         self.integration_time_entry.insert(tk.END, str(self.integration_time))
         self.set_integration_time_button = ttk.Button(
-            self.wasatch_parameters_frame,
-            text="Set",
-            command=self.set_integration_time,
-            width=4,
+            self.wasatch_parameters_frame, text="Set", command=self.set_integration_time
+
         )
         self.set_integration_time_button.grid(row=0, column=2, padx=PADX, pady=(PADY, 0))
 
@@ -399,10 +398,8 @@ class MyGUI:
         self.scans_to_average_entry.grid(row=0, column=4, padx=PADX, pady=(PADY, 0), sticky="ew")
         self.scans_to_average_entry.insert(tk.END, str(self.scans_to_average))
         self.set_scans_to_average_button = ttk.Button(
-            self.wasatch_parameters_frame,
-            text="Set",
-            command=self.set_scans_to_average,
-            width=4,
+            self.wasatch_parameters_frame, text="Set", command=self.set_scans_to_average
+
         )
         self.set_scans_to_average_button.grid(row=0, column=5, padx=PADX, pady=(PADY, 0))
 
@@ -413,10 +410,8 @@ class MyGUI:
         self.boxcar_half_width_entry.grid(row=1, column=1, padx=PADX, pady=(PADY, PADY), sticky="ew")
         self.boxcar_half_width_entry.insert(tk.END, str(self.boxcar_half_width))
         self.set_boxcar_half_width_button = ttk.Button(
-            self.wasatch_parameters_frame,
-            text="Set",
-            command=self.set_boxcar_half_width,
-            width=4,
+            self.wasatch_parameters_frame, text="Set", command=self.set_boxcar_half_width
+
         )
         self.set_boxcar_half_width_button.grid(row=1, column=2, padx=PADX, pady=(PADY, PADY))
 
@@ -426,10 +421,8 @@ class MyGUI:
         self.delay_ms_entry.grid(row=1, column=4, padx=PADX, pady=(PADY, PADY), sticky="ew")
         self.delay_ms_entry.insert(tk.END, str(self.delay_ms))
         self.set_delay_ms_button = ttk.Button(
-            self.wasatch_parameters_frame,
-            text="Set",
-            command=self.set_delay_ms,
-            width=4,
+            self.wasatch_parameters_frame, text="Set", command=self.set_delay_ms
+
         )
         self.set_delay_ms_button.grid(row=1, column=5, padx=PADX, pady=(PADY, PADY))
 
@@ -440,22 +433,14 @@ class MyGUI:
         self.max_spectra_entry.grid(row=1, column=7, padx=PADX, pady=(PADY, PADY), sticky="ew")
         self.max_spectra_entry.insert(tk.END, str(self.max_spectra))
         self.set_max_spectra_button = ttk.Button(
-            self.wasatch_parameters_frame,
-            text="Set",
-            command=self.set_max_spectra,
-            width=4,
+            self.wasatch_parameters_frame, text="Set", command=self.set_max_spectra
+
         )
         self.set_max_spectra_button.grid(row=1, column=8, padx=PADX, pady=(PADY, PADY))
 
         for c in range(9):
-            if c in (0, 3, 6):
-                minsize = 120
-            elif c in (2, 5, 8):
-                minsize = 50
-            else:
-                minsize = 0
+            self.wasatch_parameters_frame.grid_columnconfigure(c, weight=1)
 
-            self.wasatch_parameters_frame.grid_columnconfigure(c, weight=1, minsize=minsize)
 
         # Measuring frame
         self.wasatch_measure_frame = ttk.LabelFrame(self.controls_frame, text="Measuring", **FRAME_KWARGS)
@@ -478,6 +463,7 @@ class MyGUI:
         ttk.Label(self.wasatch_measure_frame, text="Y:").grid(row=0, column=2, padx=PADX, pady=(PADY, 0), sticky="e")
         ttk.Label(self.wasatch_measure_frame, text="Z:").grid(row=0, column=4, padx=PADX, pady=(PADY, 0), sticky="e")
 
+
         for c in range(6):
             self.wasatch_measure_frame.grid_columnconfigure(c, weight=1)
         for entry in (
@@ -487,7 +473,22 @@ class MyGUI:
         ):
             entry.bind("<KeyRelease>", lambda e: self.calculate_predicted_points())
 
-        # dark and light reference buttons in same row
+        # Progress bar and percentage on same row
+        self.progress_bar = ttk.Progressbar(self.wasatch_measure_frame, orient="horizontal", length=300, mode="determinate")
+        self.progress_bar.grid(row=1, column=0, columnspan=5, padx=PADX, pady=(PADY, 0), sticky="ew")
+
+        self.progress_label = ttk.Label(self.wasatch_measure_frame, text="0 %", anchor="center")
+        self.progress_label.grid(row=1, column=5, padx=PADX, pady=(PADY, 0), sticky="e")
+
+        # label and description on one row
+        self.run_once_label = ttk.Label(self.wasatch_measure_frame, text="Label:")
+        self.run_once_label.grid(row=2, column=0, padx=PADX, pady=(PADY, 0), sticky="w")
+
+        self.run_once_description = ttk.Entry(self.wasatch_measure_frame, width=30)
+        self.run_once_description.grid(row=2, column=1, columnspan=5, padx=PADX, pady=(PADY, 0), sticky="ew")
+
+        # dark and light reference buttons after label
+
         self.wasatch_dark_button = ttk.Button(
             self.wasatch_measure_frame,
             text="Dark",
@@ -496,6 +497,7 @@ class MyGUI:
         )
         self.wasatch_dark_button.grid(row=1, column=0, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
         ToolTip(self.wasatch_dark_button, "Record dark reference at current position", self)
+
 
         self.wasatch_light_button = ttk.Button(
             self.wasatch_measure_frame,
@@ -531,12 +533,16 @@ class MyGUI:
         self.run_once_description = ttk.Entry(self.wasatch_measure_frame, width=30)
         self.run_once_description.grid(row=3, column=1, columnspan=5, padx=PADX, pady=(PADY, 0), sticky="ew")
 
+
         # measurement control buttons
         self.run_once_button = ttk.Button(self.wasatch_measure_frame, text="Run once", command=self.start_measurement_once)
         self.run_once_button.grid(row=4, column=0, columnspan=2, padx=PADX, pady=(PADY, 0), sticky="ew")
+        ToolTip(self.run_once_button, "Acquire a single measurement at current position", self)
 
         self.run_area_button = ttk.Button(self.wasatch_measure_frame, text="Run area", command=self.start_measurement)
         self.run_area_button.grid(row=4, column=2, columnspan=2, padx=PADX, pady=(PADY, 0), sticky="ew")
+        ToolTip(self.run_area_button, "Start scan over defined area", self)
+
 
         self.wasatch_stop_button = ttk.Button(self.wasatch_measure_frame, text="Stop", command=self.stop_measurement)
         self.wasatch_stop_button.grid(row=4, column=4, columnspan=2, padx=PADX, pady=(PADY, 0), sticky="ew")
@@ -547,6 +553,8 @@ class MyGUI:
             command=self.pause_for_reference
         )
         self.pause_button.grid(row=5, column=0, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
+        ToolTip(self.pause_button, "Pause scan to take dark and optional light references", self)
+
         self.continue_button = ttk.Button(
             self.wasatch_measure_frame,
             text="Continue",
@@ -554,10 +562,13 @@ class MyGUI:
             state=tk.DISABLED
         )
         self.continue_button.grid(row=5, column=3, columnspan=2, padx=PADX, pady=(PADY, 0), sticky="ew")
+        ToolTip(self.continue_button, "Return to saved position and resume scan", self)
+
 
         # Dark mode toggle inside measuring frame
         self.dark_button = ttk.Button(self.wasatch_measure_frame, text="Dark Mode", command=self.toggle_dark_mode)
         self.dark_button.grid(row=5, column=5, padx=PADX, pady=(PADY, 0), sticky="ew")
+        ToolTip(self.dark_button, "Toggle dark theme", self)
 
         self.estimated_time_var = tk.StringVar(value="Estimated time: n/a")
         self.estimated_time_label = ttk.Label(
@@ -569,6 +580,25 @@ class MyGUI:
             self.wasatch_measure_frame, orient="horizontal", length=300, mode="determinate"
         )
         self.time_calc_progress.grid(row=7, column=0, columnspan=6, padx=PADX, pady=(0, PADY), sticky="ew")
+
+        # toggles for plot visibility
+        self.view_frame = ttk.Frame(self.controls_frame)
+        self.view_frame.pack(fill='x', padx=PADX, pady=1)
+        self.map_visible_var = tk.IntVar(value=1)
+        self.points_visible_var = tk.IntVar(value=1)
+        ttk.Checkbutton(
+            self.view_frame,
+            text="Head 3D",
+            variable=self.map_visible_var,
+            command=self.toggle_head_plot,
+        ).pack(side='left')
+        ttk.Checkbutton(
+            self.view_frame,
+            text="Scan points",
+            variable=self.points_visible_var,
+            command=self.toggle_points_plot,
+        ).pack(side='left')
+
 
         # list of widgets disabled during a long scan
         self.disable_on_run = [
@@ -627,6 +657,7 @@ class MyGUI:
         zoom_frame.pack()
         ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 0.8, True)).pack(side="left")
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
+        ttk.Button(zoom_frame, text="Open", command=self.open_points_window).pack(side="left")
 
         self.calculate_predicted_points()
 
@@ -696,6 +727,68 @@ class MyGUI:
             for axis in [self.map_ax.xaxis, self.map_ax.yaxis, self.map_ax.zaxis]:
 
                 axis.line.set_color(fg)
+
+    def toggle_head_plot(self):
+        if self.map_visible_var.get():
+            self.map_frame.grid()
+        else:
+            self.map_frame.grid_remove()
+
+    def toggle_points_plot(self):
+        if self.points_visible_var.get():
+            self.points_frame.grid()
+        else:
+            self.points_frame.grid_remove()
+
+    def open_map_window(self):
+        if getattr(self, 'map_win', None):
+            return
+        self.map_visible_var.set(0)
+        self.map_frame.grid_remove()
+        self.map_win = tk.Toplevel(self.root)
+        self.map_win.title("Head position 3D")
+        self.map_win.protocol('WM_DELETE_WINDOW', self.close_map_window)
+        self.map_canvas = FigureCanvasTkAgg(self.map_fig, master=self.map_win)
+        self.map_canvas.draw()
+        self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+
+    def close_map_window(self):
+        if getattr(self, 'map_win', None):
+            self.map_canvas.get_tk_widget().destroy()
+            self.map_canvas = FigureCanvasTkAgg(self.map_fig, master=self.map_frame)
+            self.map_canvas.draw()
+            self.map_canvas.get_tk_widget().pack(fill=tk.BOTH, expand=True)
+            self.map_frame.grid()
+            self.map_visible_var.set(1)
+            self.map_win.destroy()
+            self.map_win = None
+
+    def open_points_window(self):
+        if getattr(self, 'points_win', None):
+            return
+        self.points_visible_var.set(0)
+        self.points_frame.grid_remove()
+        self.points_win = tk.Toplevel(self.root)
+        self.points_win.title("Scan points")
+        self.points_win.protocol('WM_DELETE_WINDOW', self.close_points_window)
+        self.wasatch.init_points_plot(self.points_win)
+
+    def close_points_window(self):
+        if getattr(self, 'points_win', None):
+            for child in self.points_win.winfo_children():
+                child.destroy()
+            self.wasatch.init_points_plot(self.points_frame)
+            self.points_frame.grid()
+            self.points_visible_var.set(1)
+            self.points_win.destroy()
+            self.points_win = None
+
+    def poll_head_position(self):
+        pos = self.serial.query_position()
+        if pos:
+            x, y, z = pos
+            self.update_map_position(x, y, z)
+        self.root.after(200, self.poll_head_position)
 
     def update_progress(self, progress):
         def _do():
@@ -1043,6 +1136,7 @@ class MyGUI:
 
     def auto_update_map(self):
         pos = self.serial.query_position()
+
         if pos:
             self.update_map_position(pos['X'], pos['Y'], pos['Z'])
         else:
