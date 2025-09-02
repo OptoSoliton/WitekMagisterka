@@ -223,6 +223,7 @@ class MyGUI:
         )
         self.wizard_button.grid(row=0, column=5, padx=PADX, pady=PADY)
 
+
         # Control frame for movement
         self.control_frame = ttk.LabelFrame(self.left_frame, text="CNC control", **FRAME_KWARGS)
         self.control_frame.grid(row=1, column=0, padx=PADX, pady=PADY, sticky="ew")
@@ -510,6 +511,7 @@ class MyGUI:
             text="0%",
             anchor="center",
             font=("TkDefaultFont", 8),
+
         )
         self.progress_label.place(relx=0.5, rely=0.5, anchor="center")
 
