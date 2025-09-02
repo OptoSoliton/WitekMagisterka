@@ -216,6 +216,14 @@ class MyGUI:
         )
         self.dark_theme_button.grid(row=0, column=4, padx=PADX, pady=PADY)
 
+        self.wizard_button = ttk.Button(
+            self.serial_connection_frame,
+            text="Wizard",
+            command=self.open_wizard,
+        )
+        self.wizard_button.grid(row=0, column=5, padx=PADX, pady=PADY)
+
+
         # Control frame for movement
         self.control_frame = ttk.LabelFrame(self.left_frame, text="CNC control", **FRAME_KWARGS)
         self.control_frame.grid(row=1, column=0, padx=PADX, pady=PADY, sticky="ew")
@@ -714,6 +722,16 @@ class MyGUI:
 
                 axis.line.set_color(fg)
 
+    def open_wizard(self):
+        try:
+            from .wizard import MeasurementWizard
+        except Exception:
+            from wizard import MeasurementWizard
+        if getattr(self, 'wizard', None) and self.wizard.winfo_exists():
+            self.wizard.lift()
+        else:
+            self.wizard = MeasurementWizard(self)
+
     def toggle_head_plot(self):
         if self.map_visible_var.get():
             self.map_frame.grid()
@@ -767,7 +785,6 @@ class MyGUI:
         if getattr(self, 'points_win', None):
             self.wasatch.points_canvas.get_tk_widget().destroy()
             self.wasatch.reset_points_fig_size()
-
             self.wasatch.init_points_plot(self.points_frame)
             self.points_frame.grid()
             self.points_visible_var.set(1)
