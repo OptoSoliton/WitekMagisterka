@@ -60,3 +60,8 @@ class CNCSerial:
             except Exception:
                 pass
         return None
+
+    def query_position(self):
+        """Backward-compatible wrapper for current position queries."""
+        return self.get_current_position()
+

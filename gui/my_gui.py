@@ -1135,7 +1135,8 @@ class MyGUI:
         self.root.after(0, _do)
 
     def auto_update_map(self):
-        pos = self.serial.get_current_position()
+        pos = self.serial.query_position()
+
         if pos:
             self.update_map_position(pos['X'], pos['Y'], pos['Z'])
         else:
