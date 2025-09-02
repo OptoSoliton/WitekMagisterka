@@ -47,7 +47,8 @@ class Wasatch:
         self.canvas = None
 
         # Figure for measured and predicted points (embedded by GUI)
-        self.points_fig = Figure(figsize=(2.5, 1.875), dpi=100)
+        self.points_fig_default_size = (2.5, 1.6875)
+        self.points_fig = Figure(figsize=self.points_fig_default_size, dpi=100)
         self.points_ax = self.points_fig.add_subplot(111, projection='3d')
         try:
             self.points_ax.set_proj_type('ortho')
@@ -196,7 +197,6 @@ class Wasatch:
         parser.add_argument("--boxcar-half-width",   type=int, default=0,      help="boxcar half-width (default 0)")
         parser.add_argument("--delay-ms",            type=int, default=1000,   help="delay between integrations (ms, default 1000)")
         parser.add_argument("--outfile",             type=str, default=None,   help="output filename (e.g. path/to/spectra.csv)")
-        parser.add_argument("--max",                 type=int, default=0,      help="max spectra to acquire (default 0, unlimited)")
         parser.add_argument("--non-blocking",        action="store_true",      help="non-blocking USB interface (WasatchDeviceWrapper instead of WasatchDevice)")
         parser.add_argument("--ascii-art",           action="store_true",      help="graph spectra in ASCII")
         parser.add_argument("--version",             action="store_true",      help="display Wasatch.PY version and exit")
@@ -400,10 +400,6 @@ class Wasatch:
         self.args.delay_ms = delay_ms
         print(f'Delay set to {delay_ms} ms')
 
-    def set_max_spectra(self, max_spectra):
-        self.args.max = max_spectra
-        print(f'Max spectra set to {max_spectra}')
-
     def init_file(self):
         if not self.args.outfile:
             return
@@ -538,6 +534,9 @@ class Wasatch:
         self.points_canvas.draw()
         # use literal string to avoid depending on tkinter alias
         self.points_canvas.get_tk_widget().pack(fill="both", expand=True)
+
+    def reset_points_fig_size(self):
+        self.points_fig.set_size_inches(*self.points_fig_default_size)
 
     def init_spectrum_plot(self, frame):
         if self.canvas:
