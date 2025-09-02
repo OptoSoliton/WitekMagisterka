@@ -119,6 +119,7 @@ class MyGUI:
 
         # Actual XYZ position
         self.current_position = {'X': 0, 'Y': 0, 'Z': 0}
+        self._last_drawn_pos = None
         # Positions 1-5 used to define scan volume
         # 1 - origin, 2 - X extent, 4 - Y extent, 5 - Z extent, 3 optional
         self.user_positions = {
@@ -449,11 +450,11 @@ class MyGUI:
         # sample counts in a single row
         self.wasatch_samples_countX_entry = ttk.Entry(self.wasatch_measure_frame)
         self.wasatch_samples_countX_entry.grid(row=0, column=1, padx=PADX, pady=(PADY, 0), sticky="ew")
-        self.wasatch_samples_countX_entry.insert(tk.END, '10')
+        self.wasatch_samples_countX_entry.insert(tk.END, '1')
 
         self.wasatch_samples_countY_entry = ttk.Entry(self.wasatch_measure_frame)
         self.wasatch_samples_countY_entry.grid(row=0, column=3, padx=PADX, pady=(PADY, 0), sticky="ew")
-        self.wasatch_samples_countY_entry.insert(tk.END, '10')
+        self.wasatch_samples_countY_entry.insert(tk.END, '1')
 
         self.wasatch_samples_countZ_entry = ttk.Entry(self.wasatch_measure_frame)
         self.wasatch_samples_countZ_entry.grid(row=0, column=5, padx=PADX, pady=(PADY, 0), sticky="ew")
@@ -584,8 +585,8 @@ class MyGUI:
         # toggles for plot visibility
         self.view_frame = ttk.Frame(self.controls_frame)
         self.view_frame.pack(fill='x', padx=PADX, pady=1)
-        self.map_visible_var = tk.IntVar(value=1)
-        self.points_visible_var = tk.IntVar(value=1)
+        self.map_visible_var = tk.IntVar(value=0)
+        self.points_visible_var = tk.IntVar(value=0)
         ttk.Checkbutton(
             self.view_frame,
             text="Head 3D",
@@ -658,7 +659,8 @@ class MyGUI:
         ttk.Button(zoom_frame, text="🔍+", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 0.8, True)).pack(side="left")
         ttk.Button(zoom_frame, text="🔍-", command=lambda: self.zoom_axes(self.wasatch.points_ax, self.wasatch.points_canvas, 1.25, True)).pack(side="left")
         ttk.Button(zoom_frame, text="Open", command=self.open_points_window).pack(side="left")
-
+        self.toggle_head_plot()
+        self.toggle_points_plot()
         self.calculate_predicted_points()
 
     def disable_controls(self):
@@ -731,12 +733,14 @@ class MyGUI:
     def toggle_head_plot(self):
         if self.map_visible_var.get():
             self.map_frame.grid()
+            self.map_canvas.draw_idle()
         else:
             self.map_frame.grid_remove()
 
     def toggle_points_plot(self):
         if self.points_visible_var.get():
             self.points_frame.grid()
+            self.wasatch.update_points_plot()
         else:
             self.points_frame.grid_remove()
 
@@ -1132,23 +1136,27 @@ class MyGUI:
             self.position_label.config(text=f"X:{x:.1f} Y:{y:.1f} Z:{z:.1f}")
             self.wasatch.position = (x, y, z)
             self.update_volume_display()
-        self.wasatch.update_points_plot()
+            if self.points_visible_var.get():
+                self.wasatch.update_points_plot()
+            self._last_drawn_pos = (x, y, z)
 
-        self.root.after(0, _do)
+        self.root.after_idle(_do)
 
     def auto_update_map(self):
-        pos = self.serial.query_position()
-
-        if pos:
-            self.update_map_position(pos['X'], pos['Y'], pos['Z'])
-        else:
-            self.update_map_position(
-                self.current_position['X'],
-                self.current_position['Y'],
-                self.current_position['Z']
-            )
-        self.map_canvas.draw_idle()
-        self.root.after(200, self.auto_update_map)
+        if self.map_visible_var.get() or getattr(self, 'map_win', None):
+            pos = self.serial.query_position()
+            if pos:
+                coords = (pos['X'], pos['Y'], pos['Z'])
+            else:
+                coords = (
+                    self.current_position['X'],
+                    self.current_position['Y'],
+                    self.current_position['Z'],
+                )
+            if self._last_drawn_pos != coords:
+                self.update_map_position(*coords)
+                self.map_canvas.draw_idle()
+        self.root.after(500, self.auto_update_map)
 
 
     def mark_current_position(self):
