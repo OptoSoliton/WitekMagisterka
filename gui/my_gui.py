@@ -1,3 +1,6 @@
+from pathlib import Path
+import sys
+
 import tkinter as tk
 from tkinter import ttk, scrolledtext, filedialog, messagebox
 import queue
@@ -5,9 +8,21 @@ import time
 import threading
 import numpy as np
 import logging
-from pathlib import Path
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg
 from matplotlib.figure import Figure  # required for embedded plots
+
+
+def resource_path(rel: str) -> Path:
+    base = Path(getattr(sys, "_MEIPASS", Path(__file__).resolve().parent))
+    return (base / rel).resolve()
+
+
+def load_help_text() -> str:
+    for rel in ("help/help.txt", "help.txt", "gui/help.txt"):
+        p = resource_path(rel)
+        if p.exists():
+            return p.read_text(encoding="utf-8", errors="replace")
+    return "Help file not found. Put help/help.txt next to the .exe."
 
 # Global padding to keep layout compact
 PADX = 3
@@ -720,12 +735,7 @@ class MyGUI:
                 axis.line.set_color(fg)
 
     def open_help(self):
-        help_path = Path(__file__).resolve().parent.parent / "help.txt"
-        try:
-            content = help_path.read_text(encoding="utf-8")
-        except Exception as e:
-            messagebox.showerror("Error", f"Failed to load help file: {e}")
-            return
+        content = load_help_text()
         win = tk.Toplevel(self.root)
         win.title("Help")
         text = scrolledtext.ScrolledText(win, wrap='word', width=100, height=40)
