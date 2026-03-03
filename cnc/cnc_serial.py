@@ -2,12 +2,14 @@ import serial
 import serial.tools.list_ports
 import time
 import re
+import threading
 
 
 class CNCSerial:
     def __init__(self):
         self.serial_port = None
         self.connected = False
+        self._io_lock = threading.Lock()
 
     def connect_cnc(self, port):
         try:
@@ -27,17 +29,26 @@ class CNCSerial:
 
     def send_gcode(self, command):
         if self.serial_port and self.connected:
-            self.serial_port.write((command + '\n').encode())
-            return f"Command sent: {command}"
+            try:
+                with self._io_lock:
+                    self.serial_port.write((command + '\n').encode())
+                return f"Command sent: {command}"
+            except Exception as e:
+                self.connected = False
+                return f"Serial write error: {e}"
         return "Not connected to CNC"
 
     def wait_for_ending_move(self):
         if self.serial_port and self.connected:
-            self.serial_port.write(('?\n').encode())
-            time.sleep(0.1)
-            response = self.serial_port.read_until().decode().strip()
-            if "Idle" in response:
-                return True
+            try:
+                with self._io_lock:
+                    self.serial_port.write(('?\n').encode())
+                    time.sleep(0.1)
+                    response = self.serial_port.read_until().decode(errors='replace').strip()
+                if "Idle" in response:
+                    return True
+            except Exception:
+                self.connected = False
         return False
 
     def list_serial_ports(self):
