@@ -529,7 +529,6 @@ class MyGUI:
             self.wasatch_measure_frame,
             text="Dark reference",
             command=self.run_dark,
-            state=tk.DISABLED,
         )
         self.wasatch_dark_button.grid(row=3, column=0, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
         ToolTip(self.wasatch_dark_button, "Record dark reference at current position", self)
@@ -538,7 +537,6 @@ class MyGUI:
             self.wasatch_measure_frame,
             text="Light reference",
             command=self.run_light,
-            state=tk.DISABLED,
         )
         self.wasatch_light_button.grid(row=3, column=3, columnspan=3, padx=PADX, pady=(PADY, 0), sticky="ew")
         ToolTip(self.wasatch_light_button, "Record light reference at current position", self)
@@ -687,8 +685,8 @@ class MyGUI:
                 child.config(state=tk.NORMAL)
         self.pause_button.config(state=tk.DISABLED)
         self.continue_button.config(state=tk.DISABLED)
-        self.wasatch_dark_button.config(state=tk.DISABLED)
-        self.wasatch_light_button.config(state=tk.DISABLED)
+        self.wasatch_dark_button.config(state=tk.NORMAL)
+        self.wasatch_light_button.config(state=tk.NORMAL)
 
     def set_theme(self, dark: bool):
         self.dark_mode = dark
@@ -1190,15 +1188,14 @@ class MyGUI:
 
 
     def mark_current_position(self):
-        idx = len(self.marked_positions) + 1
         pos = {
             'X': self.current_position['X'],
             'Y': self.current_position['Y'],
             'Z': self.current_position['Z'],
-            'index': idx,
+            'type': 'user_marked',
         }
         self.marked_positions.append(pos)
-        self.marked_list.insert(tk.END, f"{idx}: X{pos['X']:.2f} Y{pos['Y']:.2f} Z{pos['Z']:.2f}")
+        self.refresh_marked_positions()
         self.update_volume_display()
 
     def delete_marked_point(self):
@@ -1206,12 +1203,53 @@ class MyGUI:
         if not sel:
             return
         index = sel[0]
+        if self.marked_positions[index].get('type') == 'fixed_set':
+            self.log("Fixed Set Border Point can be changed only with SET buttons")
+            return
         del self.marked_positions[index]
+        self.refresh_marked_positions()
+        self.update_volume_display()
+
+    def refresh_marked_positions(self):
         self.marked_list.delete(0, tk.END)
         for i, pos in enumerate(self.marked_positions, start=1):
             pos['index'] = i
-            self.marked_list.insert(tk.END, f"{i}: X{pos['X']:.2f} Y{pos['Y']:.2f} Z{pos['Z']:.2f}")
-        self.update_volume_display()
+            if pos.get('type') == 'fixed_set':
+                label = f"Fixed Set Border Point {pos.get('set_key', '?')}"
+            else:
+                label = "User Marked Point"
+            self.marked_list.insert(
+                tk.END,
+                f"{i}. {label}: X{pos['X']:.2f} Y{pos['Y']:.2f} Z{pos['Z']:.2f}",
+            )
+
+    def sync_set_point_marker(self, set_key):
+        set_point = self.user_positions.get(str(set_key))
+        if not set_point:
+            return
+
+        existing = None
+        for pos in self.marked_positions:
+            if pos.get('type') == 'fixed_set' and pos.get('set_key') == str(set_key):
+                existing = pos
+                break
+
+        if existing is None:
+            self.marked_positions.append(
+                {
+                    'X': set_point['X'],
+                    'Y': set_point['Y'],
+                    'Z': set_point['Z'],
+                    'type': 'fixed_set',
+                    'set_key': str(set_key),
+                }
+            )
+        else:
+            existing['X'] = set_point['X']
+            existing['Y'] = set_point['Y']
+            existing['Z'] = set_point['Z']
+
+        self.refresh_marked_positions()
 
     def update_volume_display(self):
         import itertools
@@ -1321,6 +1359,7 @@ class MyGUI:
 
     def set_position(self, position_number):
         self.user_positions[str(position_number)] = self.current_position.copy()
+        self.sync_set_point_marker(position_number)
         self.log(
             f"Position {position_number} set to X:{self.current_position['X']}, Y:{self.current_position['Y']}, Z:{self.current_position['Z']}."
         )
@@ -1719,8 +1758,8 @@ class MyGUI:
         self.update_map_position(target['X'], target['Y'], target['Z'])
         self.paused = False
         self.continue_button.config(state=tk.DISABLED)
-        self.wasatch_dark_button.config(state=tk.DISABLED)
-        self.wasatch_light_button.config(state=tk.DISABLED)
+        self.wasatch_dark_button.config(state=tk.NORMAL)
+        self.wasatch_light_button.config(state=tk.NORMAL)
         for frame in [self.control_frame, self.step_speed_frame]:
             for child in frame.winfo_children():
                 child.config(state=tk.DISABLED)
