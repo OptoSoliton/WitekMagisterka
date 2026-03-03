@@ -3,6 +3,10 @@ import serial.tools.list_ports
 import time
 import re
 import threading
+import logging
+
+
+log = logging.getLogger(__name__)
 
 
 class CNCSerial:
@@ -57,10 +61,11 @@ class CNCSerial:
     def get_current_position(self):
         if self.serial_port and self.connected:
             try:
-                self.serial_port.reset_input_buffer()
-                self.serial_port.write(b'?\n')
-                time.sleep(0.05)
-                response = self.serial_port.read_until().decode().strip()
+                with self._io_lock:
+                    self.serial_port.reset_input_buffer()
+                    self.serial_port.write(b'?\n')
+                    time.sleep(0.05)
+                    response = self.serial_port.read_until().decode(errors='replace').strip()
                 match = re.search(r'WPos:([\-\d\.]+),([\-\d\.]+),([\-\d\.]+)', response)
                 if match:
                     return {
@@ -68,8 +73,9 @@ class CNCSerial:
                         'Y': float(match.group(2)),
                         'Z': float(match.group(3)),
                     }
-            except Exception:
-                pass
+            except Exception as exc:
+                self.connected = False
+                log.warning("Failed to query CNC position: %s", exc)
         return None
 
     def query_position(self):
