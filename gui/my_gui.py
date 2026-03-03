@@ -1,4 +1,5 @@
 from pathlib import Path
+import csv
 import sys
 
 import tkinter as tk
@@ -1575,31 +1576,54 @@ class MyGUI:
             f"Step sizes: step_x={step_x}, step_y={step_y}, step_z={step_z}"
         )
 
-        # ensure absolute coordinates and move to starting point
-        self.serial.send_gcode('G90')
-        start_cmd = (
-            # Invert X axis for CNC commands
-            f"G1 X{-start_x} Y{start_y} Z{start_z} F{self.get_speed()}"
-        )
-        self.serial.send_gcode(start_cmd)
-        self.log(
-            f"Moving to start position X: {start_x}, Y: {start_y}, Z: {start_z}"
-        )
-        self.waitForCNC()
-        self.current_position = {'X': start_x, 'Y': start_y, 'Z': start_z}
-        self.update_map_position(start_x, start_y, start_z)
-
         total_points = self.samples_count_x * self.samples_count_y * self.samples_count_z
         self.log(f"Total scan points: {total_points}")
         self.wasatch.points = []
         self.wasatch.update_points_plot()
-        current_measure = 0
+
+        planned_points = []
+        for k in range(self.samples_count_z):
+            abs_z = start_z + k * step_z
+            for i in range(self.samples_count_x):
+                abs_x = start_x + i * step_x
+                for j in range(self.samples_count_y):
+                    abs_y = start_y + j * step_y
+                    planned_points.append((abs_x, abs_y, abs_z))
+
+        resume_index = 0
+        existing_points = []
+        try:
+            resume_index, existing_points = self._validate_resume_state(planned_points)
+        except ValueError as exc:
+            self.log(f"Cannot continue in selected CSV: {exc}")
+            self.running = False
+            self.serial.send_gcode('G91')
+            self.root.after(0, self.enable_controls)
+            return
+
+        if existing_points:
+            self.wasatch.points = existing_points.copy()
+            self.wasatch.update_points_plot()
+
+        if resume_index >= total_points:
+            self.log("Selected CSV already contains all scan points. Nothing to measure.")
+            self.running = False
+            self.serial.send_gcode('G91')
+            self.root.after(0, self.enable_controls)
+            return
+
+        first_target = planned_points[resume_index]
+        self._move_to_absolute(*first_target)
+
+        current_measure = resume_index
         measure_count = total_points
+        self.update_progress(int((current_measure / measure_count) * 100) if measure_count else 0)
 
         self.wasatch.init_file()
         self.log(f"Output file: {self.wasatch.args.outfile}")
 
         while self.running:
+            point_index = 0
             for k in range(self.samples_count_z):
                 abs_z = start_z + k * step_z
                 self.log(f"Z layer {k+1}/{self.samples_count_z} at Z={abs_z}")
@@ -1607,28 +1631,16 @@ class MyGUI:
                     abs_x = start_x + i * step_x
                     self.log(f"  X step {i+1}/{self.samples_count_x} at X={abs_x}")
                     for j in range(self.samples_count_y):
+                        if point_index < resume_index:
+                            point_index += 1
+                            continue
                         if not self.running:
                             break
                         while self.paused and self.running:
                             time.sleep(0.1)
                         abs_y = start_y + j * step_y
                         self.log(f"    Y step {j+1}/{self.samples_count_y} at Y={abs_y}")
-                        move_command = (
-                            # Invert X axis for CNC commands
-                            f"G1 X{-abs_x} Y{abs_y} Z{abs_z} F{self.get_speed()}"
-                        )
-                        self.serial.send_gcode(move_command)
-                        self.log(
-                            f"Moving to position X: {abs_x}, Y: {abs_y}, Z: {abs_z}"
-                        )
-                        self.waitForCNC()
-                        dx = abs(abs_x - self.current_position['X'])
-                        dy = abs(abs_y - self.current_position['Y'])
-                        dz = abs(abs_z - self.current_position['Z'])
-                        max_step = max(dx, dy, dz)
-                        self.measureDelayFromSteps(max_step)
-                        self.current_position = {'X': abs_x, 'Y': abs_y, 'Z': abs_z}
-                        self.update_map_position(abs_x, abs_y, abs_z)
+                        self._move_to_absolute(abs_x, abs_y, abs_z)
 
                         success = False
                         attempts = 0
@@ -1662,6 +1674,7 @@ class MyGUI:
                         progress = int((current_measure / measure_count) * 100)
                         self.update_progress(progress)
                         self.log(f"Measure {current_measure} out of {measure_count}.")
+                        point_index += 1
 
                     if not self.running:
                         self.log("Stopped.")
@@ -1684,6 +1697,66 @@ class MyGUI:
                     self.log(f"CSV contains {written} lines as expected")
             except Exception as exc:
                 self.log(f"Failed to verify CSV completeness: {exc}")
+
+    def _move_to_absolute(self, abs_x, abs_y, abs_z):
+        self.serial.send_gcode('G90')
+        move_command = (
+            # Invert X axis for CNC commands
+            f"G1 X{-abs_x} Y{abs_y} Z{abs_z} F{self.get_speed()}"
+        )
+        self.serial.send_gcode(move_command)
+        self.log(f"Moving to position X: {abs_x}, Y: {abs_y}, Z: {abs_z}")
+        self.waitForCNC()
+        dx = abs(abs_x - self.current_position['X'])
+        dy = abs(abs_y - self.current_position['Y'])
+        dz = abs(abs_z - self.current_position['Z'])
+        max_step = max(dx, dy, dz)
+        self.measureDelayFromSteps(max_step)
+        self.current_position = {'X': abs_x, 'Y': abs_y, 'Z': abs_z}
+        self.update_map_position(abs_x, abs_y, abs_z)
+
+    def _validate_resume_state(self, planned_points):
+        path = self.file_path_entry.get().strip()
+        if not path:
+            return 0, []
+        csv_path = Path(path)
+        if not csv_path.exists() or csv_path.stat().st_size == 0:
+            return 0, []
+
+        measured_points = []
+        with csv_path.open('r', encoding='utf-8', errors='replace', newline='') as handle:
+            reader = csv.reader(handle, delimiter=';')
+            header = next(reader, None)
+            if not header or len(header) < 4:
+                raise ValueError("missing or invalid header")
+            for row in reader:
+                if len(row) < 4:
+                    continue
+                if row[0].strip().lower() != 'scan':
+                    continue
+                try:
+                    measured_points.append((float(row[1]), float(row[2]), float(row[3])))
+                except (TypeError, ValueError):
+                    raise ValueError(f"invalid scan coordinates in row: {';'.join(row[:4])}")
+
+        if not measured_points:
+            return 0, []
+        if len(measured_points) > len(planned_points):
+            raise ValueError("more measured points than planned for current settings")
+
+        tolerance = 1e-3
+        for idx, measured in enumerate(measured_points):
+            expected = planned_points[idx]
+            if any(abs(a - b) > tolerance for a, b in zip(measured, expected)):
+                raise ValueError(
+                    "existing scan points do not match current bounds/samples "
+                    f"(first mismatch at index {idx + 1})"
+                )
+
+        self.log(
+            f"Resume check passed: found {len(measured_points)} matching scan points in existing CSV"
+        )
+        return len(measured_points), measured_points
 
     def waitForCNC(self):
         self.log("Waiting for CNC to finish move")
