@@ -171,6 +171,8 @@ class MyGUI:
         self.paused = False
         self.measure_thread = threading.Thread()
         self.pause_position = None
+        self.max_cnc_wait_s = 30
+        self.single_measure_thread = None
         self.poll_head_position()
 
         self.auto_update_map()
@@ -822,9 +824,23 @@ class MyGUI:
     def poll_head_position(self):
         pos = self.serial.query_position()
         if pos:
-            x, y, z = pos
-            self.update_map_position(x, y, z)
+            self.update_map_position(pos['X'], pos['Y'], pos['Z'])
         self.root.after(200, self.poll_head_position)
+
+    def parse_int_field(self, entry, field_name, minimum=None, show_popup=True):
+        try:
+            value = int(entry.get())
+        except ValueError:
+            self.log(f"Invalid value for {field_name}: '{entry.get()}'")
+            if show_popup:
+                self.root.after(0, lambda: messagebox.showwarning("Invalid input", f"{field_name} must be an integer"))
+            return None
+        if minimum is not None and value < minimum:
+            self.log(f"Invalid value for {field_name}: {value} < {minimum}")
+            if show_popup:
+                self.root.after(0, lambda: messagebox.showwarning("Invalid input", f"{field_name} must be >= {minimum}"))
+            return None
+        return value
 
     def update_progress(self, progress):
         def _do():
@@ -883,23 +899,31 @@ class MyGUI:
         canvas.draw_idle()
 
     def set_integration_time(self):
-        integration_time = int(self.integration_time_entry.get())
+        integration_time = self.parse_int_field(self.integration_time_entry, "Integration time", minimum=1)
+        if integration_time is None:
+            return
         self.integration_time = integration_time
         self.wasatch.set_integration_time(integration_time)
         self.update_time_estimate()
 
     def set_scans_to_average(self):
-        scans_to_average = int(self.scans_to_average_entry.get())
+        scans_to_average = self.parse_int_field(self.scans_to_average_entry, "Scans to average", minimum=1)
+        if scans_to_average is None:
+            return
         self.scans_to_average = scans_to_average
         self.wasatch.set_scans_to_average(scans_to_average)
         self.update_time_estimate()
 
     def set_boxcar_half_width(self):
-        boxcar_half_width = int(self.boxcar_half_width_entry.get())
+        boxcar_half_width = self.parse_int_field(self.boxcar_half_width_entry, "Boxcar half width", minimum=0)
+        if boxcar_half_width is None:
+            return
         self.wasatch.set_boxcar_half_width(boxcar_half_width)
 
     def set_delay_ms(self):
-        delay_ms = int(self.delay_ms_entry.get())
+        delay_ms = self.parse_int_field(self.delay_ms_entry, "Delay", minimum=0)
+        if delay_ms is None:
+            return
         self.delay_ms = delay_ms
         self.wasatch.set_delay_ms(delay_ms)
         self.update_time_estimate()
@@ -1472,6 +1496,19 @@ class MyGUI:
                 self.measure_thread.start()  # Run thread
 
     def start_measurement_once(self):
+        if self.single_measure_thread and self.single_measure_thread.is_alive():
+            self.log("Single measurement is already running")
+            return
+
+        self.disable_controls()
+        self.single_measure_thread = threading.Thread(
+            target=self._run_single_measurement,
+            name="single-measurement",
+            daemon=True,
+        )
+        self.single_measure_thread.start()
+
+    def _run_single_measurement(self):
         run_once_string = self.run_once_description.get()
         if run_once_string == '':
             run_once_string = 'single measure'
@@ -1490,7 +1527,7 @@ class MyGUI:
         self.wasatch.close_file()
         if not finished:
             self.log("Single measurement aborted")
-        self.enable_controls()
+        self.root.after(0, self.enable_controls)
         return
 
     def stop_measurement(self):
@@ -1508,9 +1545,13 @@ class MyGUI:
     def measure_and_move(self):
         self.update_progress(0)
 
-        self.samples_count_x = int(self.wasatch_samples_countX_entry.get())
-        self.samples_count_y = int(self.wasatch_samples_countY_entry.get())
-        self.samples_count_z = int(self.wasatch_samples_countZ_entry.get())
+        self.samples_count_x = self.parse_int_field(self.wasatch_samples_countX_entry, "X samples", minimum=1, show_popup=False)
+        self.samples_count_y = self.parse_int_field(self.wasatch_samples_countY_entry, "Y samples", minimum=1, show_popup=False)
+        self.samples_count_z = self.parse_int_field(self.wasatch_samples_countZ_entry, "Z samples", minimum=1, show_popup=False)
+        if None in (self.samples_count_x, self.samples_count_y, self.samples_count_z):
+            self.running = False
+            self.root.after(0, self.enable_controls)
+            return
 
         x1, x2, y1, y2, z1, z2 = self.wasatch.bounds
         start_x, start_y, start_z = x1, y1, z1
@@ -1646,8 +1687,15 @@ class MyGUI:
 
     def waitForCNC(self):
         self.log("Waiting for CNC to finish move")
+        started = time.monotonic()
         while not self.serial.wait_for_ending_move():
+            if time.monotonic() - started > self.max_cnc_wait_s:
+                self.log(
+                    f"Timeout waiting for CNC idle state after {self.max_cnc_wait_s}s; continuing as fallback"
+                )
+                return False
             time.sleep(0.01)
+        return True
 
     def measureDelayFromSteps(self, step):
         wait_time_ms = self.interpolate_time(step) + 100
