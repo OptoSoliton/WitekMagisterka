@@ -196,6 +196,7 @@ class Wasatch:
         parser.add_argument("--scans-to-average",    type=int, default=1,      help="scans to average (default 1)")
         parser.add_argument("--boxcar-half-width",   type=int, default=0,      help="boxcar half-width (default 0)")
         parser.add_argument("--delay-ms",            type=int, default=1000,   help="delay between integrations (ms, default 1000)")
+        parser.add_argument("--acquire-timeout-s",   type=float, default=15.0, help="max seconds to wait for a single reading")
         parser.add_argument("--outfile",             type=str, default=None,   help="output filename (e.g. path/to/spectra.csv)")
         parser.add_argument("--non-blocking",        action="store_true",      help="non-blocking USB interface (WasatchDeviceWrapper instead of WasatchDevice)")
         parser.add_argument("--ascii-art",           action="store_true",      help="graph spectra in ASCII")
@@ -293,6 +294,10 @@ class Wasatch:
             log.error("attempt_reading exception: %s", exc, exc_info=True)
             return False
 
+        if reading_response is None:
+            log.error("Timed out waiting for spectrometer reading")
+            return False
+
         if isinstance(reading_response.data, bool):
             if reading_response.data:
                 log.warning("received poison-pill, exiting")
@@ -308,11 +313,27 @@ class Wasatch:
         return True
 
     def acquire_reading(self):
+        start = time.monotonic()
+        timeout_s = max(0.1, float(getattr(self.args, "acquire_timeout_s", 15.0)))
         while True:
+            if self.device is None:
+                log.error("acquire_reading called without an active device")
+                return None
+
             reading = self.device.acquire_data()
             if reading is not None:
                 return reading
-            print("waiting on next reading")
+
+            elapsed_s = time.monotonic() - start
+            if elapsed_s > timeout_s:
+                log.error(
+                    "No spectrometer reading after %.2fs (timeout %.2fs)",
+                    elapsed_s,
+                    timeout_s,
+                )
+                return None
+
+            log.debug("waiting on next reading (%.2fs/%.2fs)", elapsed_s, timeout_s)
             time.sleep(0.05)
 
     def process_reading(self, reading):
