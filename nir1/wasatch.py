@@ -75,6 +75,9 @@ class Wasatch:
         self.points_zoomed = False
         self.marked_dots = []
         self.marked_labels = []
+        self.measurement_description = ""
+        self.measurement_column = None
+        self.measurement_row = None
 
     def set_dark_mode(self, dark: bool):
         """Toggle matplotlib figures between light and dark themes."""
@@ -287,8 +290,11 @@ class Wasatch:
                 pass
         return ok
 
-    def run_with_position(self, label, x, y, z):
+    def run_with_position(self, label, x, y, z, column=None, row=None, description=None):
         self.position = (x, y, z)
+        self.measurement_column = column
+        self.measurement_row = row
+        self.measurement_description = description or ""
         return self.run(label)
 
     def attempt_reading(self):
@@ -366,8 +372,11 @@ class Wasatch:
 
         if self.outfile:
             x, y, z = self.position
-            self.outfile.write("%s;%s;%s;%s;%.2f;%s\n" % (
+            self.outfile.write("%s;%s;%s;%s;%s;%s;%.2f;%s\n" % (
                 self.type,
+                self.measurement_description,
+                self.measurement_column if self.measurement_column is not None else "",
+                self.measurement_row if self.measurement_row is not None else "",
                 format(x, ".2f") if x is not None else "",
                 format(y, ".2f") if y is not None else "",
                 format(z, ".2f") if z is not None else "",
@@ -454,7 +463,7 @@ class Wasatch:
             if mode == "w" and getattr(self.device, "settings", None):
                 wavelengths = self.device.settings.wavelengths
                 self.outfile.write(
-                    "type;x;y;z;temp;%s\n" % ";".join(f"{x:.2f}" for x in wavelengths)
+                    "type;description;column;row;x;y;z;temp;%s\n" % ";".join(f"{x:.2f}" for x in wavelengths)
                 )
         except Exception as e:
             print(f"Error initializing {self.args.outfile}: {e}")
