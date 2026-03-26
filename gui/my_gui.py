@@ -384,13 +384,13 @@ class MyGUI:
         self.show_light_reference_var = tk.IntVar(value=0)
         ttk.Checkbutton(
             self.spectrum_frame,
-            text="See dark reference",
+            text="Overlay dark reference",
             variable=self.show_dark_reference_var,
             command=self.update_reference_visibility,
         ).pack(anchor='w', padx=PADX)
         ttk.Checkbutton(
             self.spectrum_frame,
-            text="See light reference",
+            text="Overlay light reference",
             variable=self.show_light_reference_var,
             command=self.update_reference_visibility,
         ).pack(anchor='w', padx=PADX)
@@ -741,6 +741,10 @@ class MyGUI:
             self.show_dark_reference_var.get(),
             self.show_light_reference_var.get(),
         )
+        self.log(
+            f"Spectrum overlays -> dark: {'on' if self.show_dark_reference_var.get() else 'off'}, "
+            f"light: {'on' if self.show_light_reference_var.get() else 'off'}"
+        )
 
     def _set_remaining_estimate(self, completed_points, total_points):
         if total_points <= 0 or self.scan_per_point_s <= 0:
@@ -963,6 +967,7 @@ class MyGUI:
             return
         self.integration_time = integration_time
         self.wasatch.set_integration_time(integration_time)
+        self.log(f"Integration time set to {integration_time} ms")
         self.update_time_estimate()
 
     def set_scans_to_average(self):
@@ -971,6 +976,7 @@ class MyGUI:
             return
         self.scans_to_average = scans_to_average
         self.wasatch.set_scans_to_average(scans_to_average)
+        self.log(f"Scans to average set to {scans_to_average}")
         self.update_time_estimate()
 
     def set_boxcar_half_width(self):
@@ -978,6 +984,7 @@ class MyGUI:
         if boxcar_half_width is None:
             return
         self.wasatch.set_boxcar_half_width(boxcar_half_width)
+        self.log(f"Boxcar half width set to {boxcar_half_width}")
 
     def set_delay_ms(self):
         delay_ms = self.parse_int_field(self.delay_ms_entry, "Delay", minimum=0)
@@ -985,6 +992,7 @@ class MyGUI:
             return
         self.delay_ms = delay_ms
         self.wasatch.set_delay_ms(delay_ms)
+        self.log(f"Delay set to {delay_ms} ms")
         self.update_time_estimate()
 
     def browse_file_path(self):
