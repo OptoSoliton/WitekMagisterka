@@ -152,6 +152,8 @@ class MyGUI:
         self.scans_to_average = 1
         self.boxcar_half_width = 0
         self.delay_ms = 1000
+        self.scan_per_point_s = 0.0
+        self.scan_total_points = 0
 
         self.samples_count_x = 1
         self.samples_count_y = 1
@@ -377,6 +379,21 @@ class MyGUI:
         for i, (text, cmd) in enumerate(buttons):
             ttk.Button(nav_frame, text=text, command=cmd).grid(row=0, column=i, padx=PADX, pady=(PADY, 0))
             nav_frame.grid_columnconfigure(i, weight=1)
+
+        self.show_dark_reference_var = tk.IntVar(value=0)
+        self.show_light_reference_var = tk.IntVar(value=0)
+        ttk.Checkbutton(
+            self.spectrum_frame,
+            text="See dark reference",
+            variable=self.show_dark_reference_var,
+            command=self.update_reference_visibility,
+        ).pack(anchor='w', padx=PADX)
+        ttk.Checkbutton(
+            self.spectrum_frame,
+            text="See light reference",
+            variable=self.show_light_reference_var,
+            command=self.update_reference_visibility,
+        ).pack(anchor='w', padx=PADX)
 
 
         # Marked positions (po prawej)
@@ -690,6 +707,19 @@ class MyGUI:
         self.continue_button.config(state=tk.DISABLED)
         self.wasatch_dark_button.config(state=tk.NORMAL)
         self.wasatch_light_button.config(state=tk.NORMAL)
+
+    def update_reference_visibility(self):
+        self.wasatch.set_reference_visibility(
+            self.show_dark_reference_var.get(),
+            self.show_light_reference_var.get(),
+        )
+
+    def _set_remaining_estimate(self, completed_points, total_points):
+        if total_points <= 0 or self.scan_per_point_s <= 0:
+            return
+        remaining_points = max(total_points - completed_points, 0)
+        remaining_s = remaining_points * self.scan_per_point_s
+        self.estimated_time_var.set(f"Estimated time left: {remaining_s:.1f} s")
 
     def set_theme(self, dark: bool):
         self.dark_mode = dark
@@ -1577,6 +1607,11 @@ class MyGUI:
         )
 
         total_points = self.samples_count_x * self.samples_count_y * self.samples_count_z
+        move_delay_ms = self.interpolate_time(max(abs(step_x), abs(step_y), abs(step_z)))
+        self.scan_per_point_s = (
+            self.integration_time * self.scans_to_average + self.delay_ms + move_delay_ms
+        ) / 1000.0
+        self.scan_total_points = total_points
         self.log(f"Total scan points: {total_points}")
         self.wasatch.points = []
         self.wasatch.update_points_plot()
@@ -1618,6 +1653,7 @@ class MyGUI:
         current_measure = resume_index
         measure_count = total_points
         self.update_progress(int((current_measure / measure_count) * 100) if measure_count else 0)
+        self.root.after(0, lambda: self._set_remaining_estimate(current_measure, measure_count))
 
         self.wasatch.init_file()
         self.log(f"Output file: {self.wasatch.args.outfile}")
@@ -1673,6 +1709,7 @@ class MyGUI:
                         current_measure += 1
                         progress = int((current_measure / measure_count) * 100)
                         self.update_progress(progress)
+                        self.root.after(0, lambda cm=current_measure, mc=measure_count: self._set_remaining_estimate(cm, mc))
                         self.log(f"Measure {current_measure} out of {measure_count}.")
                         point_index += 1
 
@@ -1682,6 +1719,7 @@ class MyGUI:
 
             self.serial.send_gcode('G91')
             self.running = False
+            self.root.after(0, self.update_time_estimate)
 
         expected_lines = self.samples_count_x * self.samples_count_y * self.samples_count_z
         if self.wasatch.outfile:
@@ -1784,8 +1822,8 @@ class MyGUI:
             return np.interp(step, steps, times)
 
     def run_dark(self):
-        if not self.paused:
-            self.log("Pause measurement before taking dark reference")
+        if self.running and not self.paused:
+            self.log("Pause measurement before taking dark reference during scan")
             return
         self.ensure_file_path()
         if self.wasatch.outfile is None or self.wasatch.outfile.closed:
@@ -1817,8 +1855,8 @@ class MyGUI:
         self.continue_button.config(state=tk.NORMAL)
 
     def run_light(self):
-        if not self.paused:
-            self.log("Pause measurement before taking light reference")
+        if self.running and not self.paused:
+            self.log("Pause measurement before taking light reference during scan")
             return
         self.ensure_file_path()
         if self.wasatch.outfile is None or self.wasatch.outfile.closed:
@@ -1853,6 +1891,7 @@ class MyGUI:
             return
         self.paused = True
         self.dark_taken = False
+        self.pause_button.config(state=tk.DISABLED)
         self.continue_button.config(state=tk.DISABLED)
         self.pause_position = self.current_position.copy()
         self.wasatch_dark_button.config(state=tk.NORMAL)
@@ -1878,6 +1917,7 @@ class MyGUI:
         self.current_position = target.copy()
         self.update_map_position(target['X'], target['Y'], target['Z'])
         self.paused = False
+        self.pause_button.config(state=tk.NORMAL)
         self.continue_button.config(state=tk.DISABLED)
         self.wasatch_dark_button.config(state=tk.NORMAL)
         self.wasatch_light_button.config(state=tk.NORMAL)
