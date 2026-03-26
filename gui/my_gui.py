@@ -571,7 +571,9 @@ class MyGUI:
         ToolTip(self.run_area_button, "Start scan over defined area", self)
 
 
-        self.wasatch_stop_button = ttk.Button(self.wasatch_measure_frame, text="Stop", command=self.stop_measurement)
+        self.wasatch_stop_button = ttk.Button(
+            self.wasatch_measure_frame, text="Stop", command=self.stop_measurement, state=tk.DISABLED
+        )
         self.wasatch_stop_button.grid(row=4, column=4, columnspan=2, padx=PADX, pady=(PADY, 0), sticky="ew")
 
         self.pause_button = ttk.Button(
@@ -642,6 +644,25 @@ class MyGUI:
             self.init_button,
         ]
 
+        self.disable_on_run_area = [
+            self.integration_time_entry,
+            self.set_integration_time_button,
+            self.scans_to_average_entry,
+            self.set_scans_to_average_button,
+            self.boxcar_half_width_entry,
+            self.set_boxcar_half_width_button,
+            self.delay_entry,
+            self.set_delay_button,
+            self.wasatch_samples_countX_entry,
+            self.wasatch_samples_countY_entry,
+            self.wasatch_samples_countZ_entry,
+            self.run_once_description,
+            self.wasatch_dark_button,
+            self.wasatch_light_button,
+            self.run_once_button,
+            self.run_area_button,
+        ]
+
         # 3D head position (lewy wykres)
         self.map_frame = ttk.LabelFrame(self.plots_frame, text="Head position 3D", **FRAME_KWARGS)
         self.map_frame.grid(row=0, column=0, sticky='nsew', padx=PADX)
@@ -696,6 +717,10 @@ class MyGUI:
             for child in frame.winfo_children():
                 child.config(state=tk.DISABLED)
         self.pause_button.config(state=tk.NORMAL)
+        self.wasatch_stop_button.config(state=tk.NORMAL if self.running else tk.DISABLED)
+        if self.running:
+            for w in self.disable_on_run_area:
+                w.config(state=tk.DISABLED)
 
     def enable_controls(self):
         for w in self.disable_on_run:
@@ -707,6 +732,9 @@ class MyGUI:
         self.continue_button.config(state=tk.DISABLED)
         self.wasatch_dark_button.config(state=tk.NORMAL)
         self.wasatch_light_button.config(state=tk.NORMAL)
+        self.wasatch_stop_button.config(state=tk.DISABLED)
+        for w in self.disable_on_run_area:
+            w.config(state=tk.NORMAL)
 
     def update_reference_visibility(self):
         self.wasatch.set_reference_visibility(
@@ -1682,7 +1710,15 @@ class MyGUI:
                         attempts = 0
                         max_attempts = 3
                         while self.running and not success:
-                            finished = self.wasatch.run_with_position("scan", abs_x, abs_y, abs_z)
+                            finished = self.wasatch.run_with_position(
+                                "scan",
+                                abs_x,
+                                abs_y,
+                                abs_z,
+                                column=i + 1,
+                                row=j + 1,
+                                description=f"scan point column {i + 1} row {j + 1}",
+                            )
                             if finished:
                                 success = True
                             else:
@@ -1735,6 +1771,7 @@ class MyGUI:
                     self.log(f"CSV contains {written} lines as expected")
             except Exception as exc:
                 self.log(f"Failed to verify CSV completeness: {exc}")
+        self.root.after(0, self.enable_controls)
 
     def _move_to_absolute(self, abs_x, abs_y, abs_z):
         self.serial.send_gcode('G90')
@@ -1767,15 +1804,23 @@ class MyGUI:
             header = next(reader, None)
             if not header or len(header) < 4:
                 raise ValueError("missing or invalid header")
+            normalized_header = [h.strip().lower() for h in header]
+            if all(col in normalized_header for col in ("x", "y", "z")):
+                x_idx = normalized_header.index("x")
+                y_idx = normalized_header.index("y")
+                z_idx = normalized_header.index("z")
+            else:
+                # legacy CSV format fallback: type;x;y;z;...
+                x_idx, y_idx, z_idx = 1, 2, 3
             for row in reader:
-                if len(row) < 4:
+                if len(row) <= max(x_idx, y_idx, z_idx):
                     continue
                 if row[0].strip().lower() != 'scan':
                     continue
                 try:
-                    measured_points.append((float(row[1]), float(row[2]), float(row[3])))
+                    measured_points.append((float(row[x_idx]), float(row[y_idx]), float(row[z_idx])))
                 except (TypeError, ValueError):
-                    raise ValueError(f"invalid scan coordinates in row: {';'.join(row[:4])}")
+                    raise ValueError(f"invalid scan coordinates in row: {';'.join(row[:7])}")
 
         if not measured_points:
             return 0, []
@@ -1837,7 +1882,11 @@ class MyGUI:
         attempts = 0
         max_attempts = 3
         while True:
-            finished = self.wasatch.run_with_position("dark", *pos)
+            finished = self.wasatch.run_with_position(
+                "dark",
+                *pos,
+                description="dark reference",
+            )
             if finished:
                 break
             attempts += 1
@@ -1870,7 +1919,11 @@ class MyGUI:
         attempts = 0
         max_attempts = 3
         while True:
-            finished = self.wasatch.run_with_position("light", *pos)
+            finished = self.wasatch.run_with_position(
+                "light",
+                *pos,
+                description="light reference",
+            )
             if finished:
                 break
             attempts += 1
