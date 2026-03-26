@@ -274,7 +274,15 @@ class Wasatch:
         self.type = label
         self.device.change_setting("integration_time_ms", self.args.integration_time_ms)
         self.device.change_setting("scans_to_average", self.args.scans_to_average)
+        self.device.change_setting("boxcar_half_width", self.args.boxcar_half_width)
         self.device.change_setting("detector_tec_enable", True)
+        log.info(
+            "Applying acquisition settings: integration_time_ms=%s, scans_to_average=%s, boxcar_half_width=%s, delay_ms=%s",
+            self.args.integration_time_ms,
+            self.args.scans_to_average,
+            self.args.boxcar_half_width,
+            self.args.delay_ms,
+        )
 
         start_time = datetime.datetime.now()
         ok = self.attempt_reading()
@@ -348,6 +356,8 @@ class Wasatch:
 
     def process_reading(self, reading):
         spectrum = reading.spectrum
+        if self.args.boxcar_half_width > 0:
+            spectrum = utils.apply_boxcar(spectrum, self.args.boxcar_half_width)
         self.reading_count += 1
         if self.type == "dark":
             self.dark_spectrum = spectrum.copy()
@@ -402,11 +412,25 @@ class Wasatch:
         def _do():
             self.ax.clear()
             wavelengths = self.device.settings.wavelengths
-            self.ax.plot(wavelengths, spectrum, label="Current")
+            self.ax.plot(wavelengths, spectrum, label="Current", linewidth=1.5)
             if self.show_dark_reference and self.dark_spectrum is not None:
-                self.ax.plot(wavelengths, self.dark_spectrum, linestyle='--', label="Dark reference")
+                self.ax.plot(
+                    wavelengths,
+                    self.dark_spectrum,
+                    linestyle='--',
+                    linewidth=1.2,
+                    color="#ef4444",
+                    label="Dark reference",
+                )
             if self.show_light_reference and self.light_spectrum is not None:
-                self.ax.plot(wavelengths, self.light_spectrum, linestyle='--', label="Light reference")
+                self.ax.plot(
+                    wavelengths,
+                    self.light_spectrum,
+                    linestyle='--',
+                    linewidth=1.2,
+                    color="#22c55e",
+                    label="Light reference",
+                )
             if self.ax.lines and (self.show_dark_reference or self.show_light_reference):
                 self.ax.legend(loc="upper right", fontsize=8)
             self.canvas.draw()
