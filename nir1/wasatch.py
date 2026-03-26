@@ -382,7 +382,7 @@ class Wasatch:
 
         if self.outfile:
             x, y, z = self.position
-            self.outfile.write("%s;%s;%s;%s;%s;%s;%.2f;%s\n" % (
+            self.outfile.write("%s;%s;%s;%s;%s;%s;%s;%.2f;%s\n" % (
                 self.type,
                 self.measurement_description,
                 self.measurement_column if self.measurement_column is not None else "",
