@@ -35,7 +35,11 @@ class Wasatch:
         self.logger  = None
         self.outfile = None
         self.type = "default"
+        self.dark_spectrum = None
         self.light_spectrum = None
+        self.show_dark_reference = False
+        self.show_light_reference = False
+        self.last_spectrum = None
         self.args = self.parse_args(argv)
         self.logger = applog.MainLogger(self.args.log_level)
         log.info(f"Wasatch.PY version {wasatch.__version__}")
@@ -339,6 +343,10 @@ class Wasatch:
     def process_reading(self, reading):
         spectrum = reading.spectrum
         self.reading_count += 1
+        if self.type == "dark":
+            self.dark_spectrum = spectrum.copy()
+        elif self.type == "light":
+            self.light_spectrum = spectrum.copy()
 
         spectrum_min = numpy.amin(spectrum)
         spectrum_max = numpy.amax(spectrum)
@@ -380,13 +388,27 @@ class Wasatch:
     def draw_graph(self, spectrum):
         if not self.canvas:
             return
+        self.last_spectrum = spectrum.copy()
 
         def _do():
             self.ax.clear()
-            self.ax.plot(self.device.settings.wavelengths, spectrum)
+            wavelengths = self.device.settings.wavelengths
+            self.ax.plot(wavelengths, spectrum, label="Current")
+            if self.show_dark_reference and self.dark_spectrum is not None:
+                self.ax.plot(wavelengths, self.dark_spectrum, linestyle='--', label="Dark reference")
+            if self.show_light_reference and self.light_spectrum is not None:
+                self.ax.plot(wavelengths, self.light_spectrum, linestyle='--', label="Light reference")
+            if self.ax.lines and (self.show_dark_reference or self.show_light_reference):
+                self.ax.legend(loc="upper right", fontsize=8)
             self.canvas.draw()
 
         self.canvas.get_tk_widget().after(0, _do)
+
+    def set_reference_visibility(self, show_dark=False, show_light=False):
+        self.show_dark_reference = bool(show_dark)
+        self.show_light_reference = bool(show_light)
+        if self.last_spectrum is not None:
+            self.draw_graph(self.last_spectrum)
 
     def set_output_file_path(self, outfile_path):
         base, ext = os.path.splitext(outfile_path)
