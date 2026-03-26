@@ -651,7 +651,7 @@ class MyGUI:
             self.set_scans_to_average_button,
             self.boxcar_half_width_entry,
             self.set_boxcar_half_width_button,
-            self.delay_entry,
+            self.delay_ms_entry,
             self.set_delay_button,
             self.wasatch_samples_countX_entry,
             self.wasatch_samples_countY_entry,
